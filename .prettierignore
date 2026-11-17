@@ -1,0 +1,8 @@
+# Docs are hand-written prose; keep their formatting as written.
+*.md
+
+dist
+coverage
+playwright-report
+test-results
+package-lock.json

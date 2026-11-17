@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Build output
+dist/
+build/
+.next/
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+
+# Real people, amounts and links; the repo is public (see CLAUDE.md)
+docs/private-notes.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude local settings
+.claude/settings.local.json
