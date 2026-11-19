@@ -3,7 +3,7 @@ node_modules/
 .venv/
 __pycache__/
 
-# Build output
+# Build output (also apps-script/dist/)
 dist/
 build/
 .next/

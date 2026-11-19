@@ -15,6 +15,9 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "screenshot": "node scripts/iphone-screenshot.mjs",
+    "backend:build": "node apps-script/build.mjs",
+    "backend:push": "npm run backend:build && clasp push --force",
+    "backend:deploy": "npm run backend:push && clasp update-deployment AKfycbzPYv2AXyE0R-lKIMSBRHMCLhRWuvRbVTcGACBqFkWOYkbc9kfwYfUs7tjARP5eMM_S --description \"Update from npm run backend:deploy\"",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run e2e"
   },
   "dependencies": {
@@ -23,12 +26,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@google/clasp": "^3.4.1",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
+    "@types/google-apps-script": "^2.0.15",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "esbuild": "^0.28.2",
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",

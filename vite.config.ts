@@ -7,6 +7,6 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'apps-script/src/**/*.test.ts'],
   },
 });
