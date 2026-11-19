@@ -15,15 +15,16 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user corrects data directly in the sheet. Always re-read the live sheet at import time.
 
 ## Current status
-**Phase 1: Project set up; core money logic done.** Planning is complete (requirements, architecture, storage "layout 1" with "Not involved" cells, and the Ideas inbox). The project is scaffolded (Vite + React + TS + Tailwind, Vitest, Playwright, ESLint, Prettier), and `npm run check` passes. `src/domain/` has the pure money logic with unit tests: dollar formatting and parsing, person cells (`"$12.34 · Paid"` / `"Not involved"`), equal/percentage/custom splits, and the fewest-transfers settlement. The UI is still a placeholder. In progress: publishing the repo and site, then the backend.
+**Phase 2: Every piece is connected.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The Apps Script backend is deployed and checks the passcode. The real storage sheet exists (5 tabs, formatting, validation, protection warnings; ID in private notes). The app's only screen so far is the passcode screen, which talks to the live backend. `src/domain/` holds the money logic (splits, person cells, settlement), fully unit-tested. Next: the MVP screens, starting with adding and listing expenses.
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
    - A sample storage sheet exists in the user's personal Drive (link and contents in private notes). The user wants to keep it until the real sheet exists.
    - The previous 7-tab design (View/People/Shares…) is superseded but recorded in `docs/decisions.md` in case the user wants to go back.
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
-3. Publish: public repo `nghiax4/household-expenses` with GitHub Pages (deploy workflow in `.github/workflows/deploy.yml`). Then the Apps Script backend: a setup function that creates the real storage sheet, a passcode check, and the app's passcode screen wired to it. Record the real sheet's file ID in private notes; CLAUDE.md's start-of-session step reads its Ideas tab.
-4. Build the MVP features (see `docs/requirements.md`), then import sheet2.
+3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
+4. Build the MVP features (see `docs/requirements.md`). Suggested order: display name per device → load + list expenses → add expense (equal split first) → Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Writes need `LockService` and Activity entries.
+5. Import sheet2 (copy the storage sheet first; ask about rows with no date).
 
 ## Open questions
 - How to handle sheet2 rows with no date (examples in private notes) at import time.
@@ -33,7 +34,10 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 ### 2026-11-19 (publishing)
 - Decided: public repo `nghiax4/household-expenses` with free GitHub Pages. The author email on commits stays as it is (the user's GitHub is public on purpose). Friends' names and real amounts must not be public: moved them to git-ignored `docs/private-notes.md`, made the public docs neutral, and switched tests to made-up data. Old commits still contained the names, so the history was squashed into one clean commit before the first push.
-- Renamed the branch to `main` and added a GitHub Actions workflow that typechecks, lints, unit-tests, builds and deploys to Pages.
+- Renamed the branch to `main` and added a GitHub Actions workflow that typechecks, lints, unit-tests, builds and deploys to Pages. Created the repo, pushed, and checked the live site in Chrome.
+- Backend: TypeScript in `apps-script/`, bundled with esbuild and uploaded with clasp (signed in as the personal Gmail). The user turned on the Apps Script API, saved the PASSCODE property themselves (Claude may not type passcodes into sites), and approved the Sheets permission. Claude saved PEOPLE. `setupStorage` created the real storage sheet. Checked it two read-only ways: through the Drive connector and by viewing it in Chrome (all 5 tabs, headers, people columns, 4 color rules, protection warning). Deployed as a web app and tested it with curl: health check, wrong code, right code, malformed request.
+- App: passcode screen → backend → remembered per phone (localStorage). E2E tests use a fake backend. Tested against the live backend from Chrome with a wrong code: "Wrong passcode." came back, so browser calls to Google work. The user hasn't yet tried the real code on a phone.
+- The user asked for a non-destructive approach with their Google account; the rules are now in CLAUDE.md.
 
 ### 2026-11-19 (project setup)
 - Clarified the performance rule in CLAUDE.md: readability decides, and speed counts neither for nor against.

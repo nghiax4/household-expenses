@@ -71,7 +71,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ## Architecture (decided 2026-11-16)
 - **Guiding principle:** the storage sheet should read as much like the app as possible: same names, same statuses, same shape where feasible. Any difference must have a concrete reason.
 - **Frontend:** a static site on a free host (e.g., GitHub Pages), mobile-first, installable to the Home Screen. Its code lives in this repo.
-- **Backend:** a Google Apps Script web app that runs as the owner. It checks the passcode on every request and uses `LockService` to serialize writes.
+- **Backend:** a Google Apps Script web app that runs as the owner. It checks the passcode on every request and uses `LockService` to serialize writes (to be added with the first write action). The app sends JSON as `text/plain` POST requests.
 - **Storage:** a **new private Google Sheet** in the user's **personal Gmail** account (not the current household sheet, which is shared by link). Only the owner has access.
   - Keys: a person's **full name**; **sequential integer IDs** for expenses and settlements.
   - Storage tabs are protected with a warning. Hand edits are for emergencies only, and the backend validates data on read.
