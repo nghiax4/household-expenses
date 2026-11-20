@@ -1,1 +1,7 @@
 @import 'tailwindcss';
+
+/* Quick repeated taps (e.g., "1", "1" on the number pad) must not trigger Safari's
+   double-tap zoom. */
+html {
+  touch-action: manipulation;
+}

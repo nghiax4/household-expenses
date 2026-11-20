@@ -12,5 +12,7 @@ test('app loads without errors and fits the screen', async ({ page }) => {
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBe(0);
+  // Nothing may open the iOS keyboard: the app has its own (docs/requirements.md → "Input").
+  await expect(page.locator('input, textarea, select, [contenteditable]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
