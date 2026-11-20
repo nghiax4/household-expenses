@@ -2,6 +2,12 @@
 
 Older session log entries moved here from `progress.md`, which keeps only the 5 most recent. Newest first.
 
+### 2026-11-17
+- Built a sample storage sheet in the user's personal Drive (generated an xlsx in the scratchpad, imported it into Google Sheets) and checked the settlement math against the source data.
+- Decided: storage lives in the personal Gmail account; the payer absorbs leftover rounding cents; Expenses drops Created by / Created at (Activity is the single record of who did what); no "Settling" status at all; guiding principle: the storage sheet should read like the app.
+- Added the user's **self-review and revision loop** rule (verbatim) to CLAUDE.md.
+- The user asked for something even simpler. Proposed and built **layout 1** (sheet2-style; storage looks like the app). Settlements record "covers up to expense #N", and percentages are input-only (stored as amounts). The user approved it ("the sheet looks cool").
+
 ### 2026-11-16
 - Set up the folder for multi-session work: `CLAUDE.md`, `progress.md`, `docs/`, `.gitignore`, git init.
 - Reviewed the user's Google Sheet in Chrome. Only **sheet2** is relevant. Flagged 3 inconsistent rows, and the user fixed them.

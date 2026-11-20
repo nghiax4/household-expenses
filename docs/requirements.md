@@ -4,10 +4,22 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 
 ## Access
 - A single shared link with **no user accounts**, protected by one **household passcode** that each device enters once.
-- Each device picks a **display name** once (from the people list). It's used for the activity log and the "what I owe" view. This is not authentication.
+- **Every phone gets the same UI.** There's no "who are you" step and no per-device name, so the app doesn't record who made a change (decided 2026-11-20).
 - **Mobile-first.** Adding an expense on a phone right after paying must be fast. That's the main pain point with sheet2.
 - **Everyone uses an iPhone**, so the app must work well in Safari (WebKit), including Add to Home Screen. Android doesn't need special attention.
 - **English UI.** Descriptions and names can be in any language (Vietnamese diacritics must display correctly).
+- **No iOS keyboard or pickers.** The app never opens the system keyboard or the slide-up date wheel; every field uses on-page controls instead. See "Input" below.
+
+## Input (no iOS keyboard; added 2026-11-20)
+- **Why:** on the household's iPhones the iOS keyboard is slow to slide up and slow to type on. On-page buttons respond like any other tap.
+- **Numbers** (passcode, total, custom split amounts, percentages): an **in-app number pad** with 0–9, `.` and ⌫. The passcode pad has no `.`.
+- **Text** (description, note, Ideas, template names, new people, search): an **in-app letter keyboard**, used **everywhere** text is typed. It has Shift, space, ⌫, and a `123` layer for digits and common punctuation (e.g., `/ - , . ' & ( )`), so "Tiền nhà 11/2026" can be typed.
+  - **Vietnamese via Telex:** `aa`→â, `aw`→ă, `ee`→ê, `oo`→ô, `ow`→ơ, `uw`→ư (`w` on its own → ư), `dd`→đ. Tones: `s` sắc, `f` huyền, `r` hỏi, `x` ngã, `j` nặng, `z` removes the tone. Pressing the same mark key again undoes the mark and types the plain letter (`ass` → "as").
+  - **Tone placement: modern style** (hòa, thủy): a vowel with a hat or horn (â ă ê ô ơ ư) takes the mark; otherwise, with no final consonant the second-to-last vowel takes it (hòa, thủy, ngoài, khuỷu), and with a final consonant the last vowel does (toán, hoàng). The `u` in `qu` and the `i` in `gi` count as part of the consonant (quá, giá). (The user accepted either style; the classic one needs extra special cases for oa, oe and uy.)
+  - **VN/EN key**, VN by default. Even in VN mode, keys turn into marks only when the result is a valid Vietnamese syllable, so most English words (e.g., "Costco") type normally without switching.
+- **Date:** defaults to today, with **Today / Yesterday** buttons and a small **in-app calendar** for older dates (also used by the date-range filter).
+- **Description shortcut:** recently used descriptions appear as **tap-to-fill chips**, so common expenses need no typing.
+- Accepted costs: no paste, autocorrect or dictation.
 
 ## People
 - Starts with the 7 people from sheet2 (4 roommates plus 3 occasional; names in private notes). Names may contain Vietnamese diacritics.
@@ -35,10 +47,10 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 
 ## Ideas (notes on undecided changes to the app)
 - A simple inbox for ideas about the app itself, e.g., "need a way to split tips" or "not sure templates are still useful". The point is to write a thought down on the phone right away, then discuss it later with Claude Code on the laptop and change the app.
-- **Anyone** can add a note: one free-text box plus an Add button. The app fills in the time and the device's display name automatically.
+- **Anyone** can add a note: one free-text box plus an Add button. The app fills in the time automatically.
 - Each note has a **Status**: Open (new), Done (acted on) or Dropped (decided against), plus an optional one-line **Outcome** (e.g., "Added in the Feb update" or "Not needed: use templates"). Anyone can edit a note's text, status and outcome. There's no delete: Dropped plays that role and keeps the history.
 - The list shows Open notes first (newest first), then Done and Dropped.
-- Ideas don't touch money, so they're not written to the Activity log. The row itself records who added the note and when.
+- Ideas don't touch money, so they're not written to the Activity log. The row itself records when the note was added.
 - **Claude Code pickup:** at the start of each session, Claude reads the Ideas tab through the Google Drive connector and lists the Open notes. After a note is discussed, the user (or Claude in Chrome, if asked) sets its Status and Outcome.
 
 ## Settlements ("Get total settlement")
@@ -54,9 +66,9 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 
 ## Views
 - **Expense list** (newest first) with **search and filters**: by person, payer, date range, keyword.
-- **"What I owe / am owed" view**: pick your name to see your unpaid shares and running totals.
+- **"What I owe / am owed" view**: pick a person from a list on that screen to see their unpaid shares and running totals.
 - **Settlements**: the current pending settlement (with its checkboxes) plus history.
-- **Activity log**: who did what and when, e.g., `Anh edited "Grocery delivery": $44.27 → $42.27`.
+- **Activity log**: what changed and when, e.g., `Edited "Grocery delivery": $44.27 → $42.27`. It doesn't say who.
 - **Ideas**: add a note, and see or update the list (see "Ideas" above).
 
 ## Safety
@@ -81,11 +93,11 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ### Storage schema: "layout 1", sheet2-style, 5 tabs (approved by the user 2026-11-17; Ideas tab added 2026-11-19)
 | Tab | Columns | Notes |
 |---|---|---|
-| **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it's in the trash. Who added or edited an expense lives only in Activity. |
+| **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it's in the trash. The history of changes to an expense lives only in Activity. |
 | **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at | One row per transfer line. A settlement is closed when all its lines are Paid (derived, not stored). |
 | **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Starting set: the 4 recurring bills (rent, Internet, electricity, insurance), all for the 4 roommates (details in private notes). |
-| **Activity** | Time, Who, Action, Details | Append-only. |
-| **Ideas** | ID, Created at, Who, Note, Status, Outcome | One row per note, with a sequential integer ID. Status is `Open`, `Done` or `Dropped`: a dropdown on E2:E1000 that rejects any other value, shown as plain text so empty rows stay clean. Outcome is optional. Rows are never deleted. |
+| **Activity** | Time, Action, Details | Append-only. |
+| **Ideas** | ID, Created at, Note, Status, Outcome | One row per note, with a sequential integer ID. Status is `Open`, `Done` or `Dropped`: a dropdown on D2:D1000 that rejects any other value, shown as plain text so empty rows stay clean. Outcome is optional. Rows are never deleted. |
 
 Formatting on the Expenses person columns (H2:Z1000), set up by the setup script through Apps Script:
 - Conditional formatting (custom formulas, in this order):

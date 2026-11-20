@@ -15,7 +15,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user corrects data directly in the sheet. Always re-read the live sheet at import time.
 
 ## Current status
-**Phase 2: Every piece is connected.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The Apps Script backend is deployed and checks the passcode. The real storage sheet exists (5 tabs, formatting, validation, protection warnings; ID in private notes). The app's only screen so far is the passcode screen, which talks to the live backend. `src/domain/` holds the money logic (splits, person cells, settlement), fully unit-tested. Next: the MVP screens, starting with adding and listing expenses.
+**Phase 2: Every piece is connected.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The Apps Script backend is deployed and checks the passcode. The real storage sheet exists (5 tabs, formatting, validation, protection warnings; ID in private notes). The app's only screen so far is the passcode screen, which talks to the live backend. `src/domain/` holds the money logic (splits, person cells, settlement), fully unit-tested. New since 2026-11-20: the app will never open the iOS keyboard; it gets its own number pad and a Telex letter keyboard (spec in `docs/requirements.md` → "Input"). Next: the MVP screens, in the order under "Next steps".
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
@@ -23,8 +23,9 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
    - The previous 7-tab design (View/People/Shares…) is superseded but recorded in `docs/decisions.md` in case the user wants to go back.
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
-4. Build the MVP features (see `docs/requirements.md`). Suggested order: display name per device → load + list expenses → add expense (equal split first) → Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Writes need `LockService` and Activity entries.
-5. Import sheet2 (copy the storage sheet first; ask about rows with no date).
+4. Small leftovers first (see the latest session log): commit the CLAUDE.md note, bump the GitHub Actions versions.
+5. Build the MVP features (see `docs/requirements.md`). Suggested order: load + list expenses (cards with a red/green chip per participant) → **in-app input** (number pad, switching the passcode screen to it; letter keyboard + Telex; Today/Yesterday + calendar) → add expense (equal split first, with recent-description chips) → Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Writes need `LockService` and Activity entries.
+6. Import sheet2 (copy the storage sheet first; ask about rows with no date).
 
 ## Open questions
 - How to handle sheet2 rows with no date (examples in private notes) at import time.
@@ -32,11 +33,19 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
 
+### 2026-11-20
+- Session start: the storage sheet's Ideas tab has no notes yet.
+- New requirement from the user: **no iOS keyboard or pickers** (slow on their iPhone). Decided: an in-app number pad; an in-app letter keyboard used everywhere text is typed, with Telex (modern tone placement, VN/EN key, VN default, converts only valid Vietnamese syllables); Today/Yesterday + an in-app calendar for dates; recent-description chips. Written into `docs/requirements.md` ("Input") and `docs/decisions.md`. Nothing built yet.
+- The user dropped the per-device display name: every phone gets the same UI, and the app doesn't record who made a change. Removed "Who" from the Activity and Ideas schema. The expense list will use cards with a red/green chip per participant.
+
 ### 2026-11-19 (publishing)
 - Decided: public repo `nghiax4/household-expenses` with free GitHub Pages. The author email on commits stays as it is (the user's GitHub is public on purpose). Friends' names and real amounts must not be public: moved them to git-ignored `docs/private-notes.md`, made the public docs neutral, and switched tests to made-up data. Old commits still contained the names, so the history was squashed into one clean commit before the first push.
 - Renamed the branch to `main` and added a GitHub Actions workflow that typechecks, lints, unit-tests, builds and deploys to Pages. Created the repo, pushed, and checked the live site in Chrome.
 - Backend: TypeScript in `apps-script/`, bundled with esbuild and uploaded with clasp (signed in as the personal Gmail). The user turned on the Apps Script API, saved the PASSCODE property themselves (Claude may not type passcodes into sites), and approved the Sheets permission. Claude saved PEOPLE. `setupStorage` created the real storage sheet. Checked it two read-only ways: through the Drive connector and by viewing it in Chrome (all 5 tabs, headers, people columns, 4 color rules, protection warning). Deployed as a web app and tested it with curl: health check, wrong code, right code, malformed request.
-- App: passcode screen → backend → remembered per phone (localStorage). E2E tests use a fake backend. Tested against the live backend from Chrome with a wrong code: "Wrong passcode." came back, so browser calls to Google work. The user hasn't yet tried the real code on a phone.
+- App: passcode screen → backend → remembered per phone (localStorage). E2E tests use a fake backend. Tested against the live backend from Chrome with a wrong code: "Wrong passcode." came back, so browser calls to Google work.
+- Committed and pushed as two commits (backend; passcode screen + docs). **The user confirmed the live site works on their iPhone with the real passcode.**
+- The passcode is in private notes. CLAUDE.md now says how to test with it (terminal calls OK; never typed into web pages; the user enters it once per Chrome tab/site).
+- Left over: (1) the CLAUDE.md testing note above isn't committed yet; (2) the user may not have entered the passcode in Claude's Chrome tabs yet (live site + localhost:5173); (3) GitHub warns the workflow's actions (checkout/setup-node/upload-pages-artifact v4/v3) run on deprecated Node 20, so bump them to their newer major versions.
 - The user asked for a non-destructive approach with their Google account; the rules are now in CLAUDE.md.
 
 ### 2026-11-19 (project setup)
@@ -55,9 +64,3 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user reviewed the sample sheet again and asked for an explicit **"Not involved"** state in Expenses (decided: plain "Not involved" text, never blank, gray text with no fill).
 - Updated the sample in Chrome: filled every non-participant cell with "Not involved", added the gray formatting rule, and made the validation case-sensitive (`EXACT`). Sheets never validates empty cells, so a separate yellow highlight now flags a blank cell on an expense row.
 - Tested in the sample: lowercase "not involved", junk text in an empty row, and a blank cell on an expense row are all flagged, and valid cells aren't. The test edits were then reverted.
-
-### 2026-11-17
-- Built a sample storage sheet in the user's personal Drive (generated an xlsx in the scratchpad, imported it into Google Sheets) and checked the settlement math against the source data.
-- Decided: storage lives in the personal Gmail account; the payer absorbs leftover rounding cents; Expenses drops Created by / Created at (Activity is the single record of who did what); no "Settling" status at all; guiding principle: the storage sheet should read like the app.
-- Added the user's **self-review and revision loop** rule (verbatim) to CLAUDE.md.
-- The user asked for something even simpler. Proposed and built **layout 1** (sheet2-style; storage looks like the app). Settlements record "covers up to expense #N", and percentages are input-only (stored as amounts). The user approved it ("the sheet looks cool").

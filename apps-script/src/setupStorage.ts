@@ -87,7 +87,8 @@ function formatPersonCells(expenses: GoogleAppsScript.Spreadsheet.Sheet): void {
 }
 
 function addIdeaStatusDropdown(ideas: GoogleAppsScript.Spreadsheet.Sheet): void {
-  ideas.getRange('E2:E1000').setDataValidation(
+  const statusColumn = TAB_HEADERS.Ideas.indexOf('Status') + 1;
+  ideas.getRange(2, statusColumn, 999, 1).setDataValidation(
     SpreadsheetApp.newDataValidation()
       .requireValueInList([...IDEA_STATUSES], false)
       .setAllowInvalid(false)

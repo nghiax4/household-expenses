@@ -16,8 +16,8 @@ export const TAB_HEADERS = {
     'Paid at',
   ],
   Templates: ['Name', 'Payer', 'Participants', 'Default amount'],
-  Activity: ['Time', 'Who', 'Action', 'Details'],
-  Ideas: ['ID', 'Created at', 'Who', 'Note', 'Status', 'Outcome'],
+  Activity: ['Time', 'Action', 'Details'],
+  Ideas: ['ID', 'Created at', 'Note', 'Status', 'Outcome'],
 } as const;
 
 export type TabName = keyof typeof TAB_HEADERS;
