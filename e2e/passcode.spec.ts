@@ -1,21 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { BACKEND_URL } from '../src/api/client';
-
-// A stand-in for the real backend, so tests never touch the household's sheet.
-async function fakeBackend(page: Page, correctPasscode: string) {
-  await page.route(BACKEND_URL, async (route) => {
-    const { passcode } = route.request().postDataJSON() as { passcode: string };
-    await route.fulfill({
-      json:
-        passcode === correctPasscode
-          ? { ok: true, value: {} }
-          : { ok: false, error: 'Wrong passcode.' },
-    });
-  });
-}
+import { fakeBackend, rememberPasscode } from './fakeBackend';
 
 test('a wrong passcode is rejected, the right one gets in and is remembered', async ({ page }) => {
-  await fakeBackend(page, '2468');
+  await fakeBackend(page);
   await page.goto('/');
 
   const passcode = page.getByLabel('Household passcode');
@@ -33,11 +21,21 @@ test('a wrong passcode is rejected, the right one gets in and is remembered', as
   await passcode.fill('2468');
   await expect(page.getByRole('alert')).toHaveText('');
   await page.getByRole('button', { name: 'Continue' }).click();
-  await expect(page.getByText('You’re in.')).toBeVisible();
+  await expect(page.getByText('No expenses yet.')).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText('You’re in.')).toBeVisible();
+  await expect(page.getByText('No expenses yet.')).toBeVisible();
   await expect(page.getByLabel('Household passcode')).toHaveCount(0);
+});
+
+test('asks again when the saved passcode stops working', async ({ page }) => {
+  await fakeBackend(page);
+  await rememberPasscode(page, '1357');
+  await page.goto('/');
+
+  await expect(page.getByLabel('Household passcode')).toBeVisible();
+  // The old passcode is forgotten, so the next visit doesn't try it again.
+  expect(await page.evaluate(() => localStorage.getItem('household-expenses.passcode'))).toBeNull();
 });
 
 test('explains when the server cannot be reached', async ({ page }) => {

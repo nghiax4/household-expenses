@@ -15,7 +15,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user corrects data directly in the sheet. Always re-read the live sheet at import time.
 
 ## Current status
-**Phase 2: Every piece is connected.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The Apps Script backend is deployed and checks the passcode. The real storage sheet exists (5 tabs, formatting, validation, protection warnings; ID in private notes). The app's only real screen so far is the passcode screen, which talks to the live backend and uses the iPhone's digit keypad. `src/domain/` holds the money logic (splits, person cells, settlement), fully unit-tested. Typing uses the iPhone keyboard (decided 2026-11-20 after trying a custom one; spec in `docs/requirements.md` → "Input"). Next: the MVP screens, in the order under "Next steps".
+**Phase 3: MVP screens.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The real storage sheet exists (5 tabs; ID in private notes) and holds only test expense #1. The backend (deployed 2026-11-21) checks the passcode, lists expenses and adds expenses (with a lock and an Activity entry). The app has the passcode screen, the **expense list** and the **Add expense form** (equal split), pushed 2026-11-22 and live. Both work against the live backend: on 2026-11-22 the user added test expense #1 ("TEST phone check lol", $1.01) from their iPhone, and the row, person cells and Activity entry were correct in the real sheet. That row should go to the trash once trash exists (ask first). `src/domain/` holds the money logic, fully unit-tested. Typing uses the iPhone keyboard (spec in `docs/requirements.md` → "Input").
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
@@ -24,7 +24,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
 4. ~~Delete the two empty "Who" columns~~ (done 2026-11-20). The backup copy can be trashed once the user is happy (ask first).
-5. Build the MVP features (see `docs/requirements.md`). Suggested order: load + list expenses (cards with a red/green chip per participant) → add expense (iPhone keyboard for text, Today/Yesterday + the iPhone date picker, equal split first, recent-description chips) → Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Writes need `LockService` and Activity entries.
+5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22. Next: Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Every write needs an Activity entry (the lock already covers every request).
 6. Import sheet2 (copy the storage sheet first; ask about rows with no date).
 
 ## Open questions
@@ -32,6 +32,21 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
+
+### 2026-11-22 (real-sheet test + payer hint)
+- Session start: no notes in the Ideas tab. All checks passed on last session's uncommitted work.
+- The user added a test expense from their iPhone (dev server over Wi-Fi) with the payer **left out of the split** on purpose. The real sheet read back correct: row #1, the extra cents going to the first people in column order, and the Activity entry.
+- The user asked whether a payer outside the split should be allowed. It's in the spec on purpose (paying only for others), so the user kept it, and the Add form now shows a hint under the share preview when it happens. E2E test extended; iPhone screenshot checked with made-up data. Spec in `docs/requirements.md`.
+- Links given to the user are plain (no `/u/1/`): they use several Chrome profiles.
+- Committed and pushed (with the 2026-11-21 work) at the user's OK. Not done yet: Paid toggles.
+
+### 2026-11-21 (expense list + add form)
+- Session start: no notes in the Ideas tab. Committed and pushed the 2026-11-20 work first (user's OK). Backup copy of the storage sheet kept for now.
+- Built the **expense list** and the **Add expense form** (equal split), end to end: shared rules in `src/domain/expense.ts` (`buildExpense`, typed-amount parsing in `money.ts`), backend actions `listExpenses`/`addExpense` (`apps-script/src/expensesTab.ts`, lock + Activity row + read-back), and the screens in `src/ui/`. Decisions in `docs/decisions.md`; spec in `docs/requirements.md` → "Expense list and Add form".
+- Product choices made for the user (they deferred; easy to change after trying it): no default payer or participants; up to 6 recent-description chips (description only); unreadable rows hidden with a yellow banner.
+- Tests: 147 unit, 14 e2e (desktop Chrome + iPhone WebKit) all pass; e2e now fail on any page error and check the add form fits the iPhone width (a date-box overflow was found and fixed this way). iPhone and desktop screenshots checked with made-up data. Claude in Chrome wasn't connected, so the desktop check used Playwright's Chrome.
+- Backend redeployed (same URL). Live check from the terminal: right passcode works, wrong one is refused, `listExpenses` reads the real (empty) sheet with all 7 people.
+- Committed and pushed on 2026-11-22, after the user tried adding against the real sheet.
 
 ### 2026-11-20 (keyboard try-out)
 - Session start: still no notes in the Ideas tab.

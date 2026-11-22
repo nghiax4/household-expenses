@@ -11,6 +11,15 @@ export function loadSavedPasscode(): string | null {
   }
 }
 
+/** For when the household passcode has changed: the phone asks for the new one. */
+export function forgetPasscode(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Nothing was saved, so there's nothing to forget.
+  }
+}
+
 export function savePasscode(passcode: string): void {
   try {
     localStorage.setItem(KEY, passcode);

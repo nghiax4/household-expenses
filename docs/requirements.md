@@ -36,6 +36,14 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Everyone who isn't a participant is shown as **Not involved** (as in sheet2), both in storage and on screen. It's not a share status: there's no amount and nothing to pay.
 - Dropped from sheet2: the "Zelle vào" column (unused) and "Extra people" (replaced by adding people).
 
+### Expense list and Add form (built 2026-11-21)
+- **List:** live expenses (trash hidden), latest date first; same-day expenses newest-added first. Each card shows description, total, date, payer, the note if any, and a chip per participant: red "Name $x" while Not paid, green "✓ Name $x" once Paid. Not-involved people get no chip.
+- **Rows the backend can't read** (bad hand edits) are left out of the list, and a yellow box at the top names each one by sheet row number with what's wrong, so it can be fixed in the sheet.
+- **Add form** (equal split only so far): Description (with up to 6 recent-description chips), Total, Date (Today / Yesterday / date picker, default today), Paid by (pick one), Split equally between (pick any), Note. **Nothing is pre-selected** for payer or participants, so a wrong default can't slip through unnoticed. Once the total, payer and people are set, the form previews each person's share with the same chips as the list.
+- The payer **doesn't have to be in the split** (e.g., buying something only for others; they're owed the full total). It's easy to do by a missed tap, so the form then says so under the preview: "Anh isn't in the split, so Anh is owed the full $1.01." (Confirmed with the user 2026-11-22.)
+- Problems are explained one at a time on Save, in form order; the backend re-checks everything. While saving, the buttons are disabled so a double tap can't add the expense twice.
+- If a saved passcode stops working (it was changed), the app forgets it and asks again.
+
 ## Quick-add templates (recurring bills)
 - Saved presets: name, payer, participants, plus an optional default amount. **Templates always split equally** (MVP). The user can switch to a custom or percentage split on the pre-filled form before saving.
 - Templates are created and edited in the app. They don't affect balances.
@@ -80,11 +88,12 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ## Architecture (decided 2026-11-16)
 - **Guiding principle:** the storage sheet should read as much like the app as possible: same names, same statuses, same shape where feasible. Any difference must have a concrete reason.
 - **Frontend:** a static site on a free host (e.g., GitHub Pages), mobile-first, installable to the Home Screen. Its code lives in this repo.
-- **Backend:** a Google Apps Script web app that runs as the owner. It checks the passcode on every request and uses `LockService` to serialize writes (to be added with the first write action). The app sends JSON as `text/plain` POST requests.
+- **Backend:** a Google Apps Script web app that runs as the owner. It checks the passcode on every request and uses `LockService` so requests run one at a time (two phones saving at once can't take the same expense ID). The app sends JSON as `text/plain` POST requests. Every write also appends an Activity row, then the backend reads the tab back and returns it, so the app shows exactly what was stored.
 - **Storage:** a **new private Google Sheet** in the user's **personal Gmail** account (not the current household sheet, which is shared by link). Only the owner has access.
   - Keys: a person's **full name**; **sequential integer IDs** for expenses and settlements.
   - Storage tabs are protected with a warning. Hand edits are for emergencies only, and the backend validates data on read.
   - Money is stored in the sheet as dollars with 2 decimals (readable) and converted to integer cents in code.
+  - The backend reads cells **as the sheet displays them** and writes: Date as a real date shown `yyyy-mm-dd`, Total as a number shown `$#,##0.00`, ID as a number, and all other text as literal text (a hidden leading apostrophe, so "1/2" doesn't become a date and "=…" doesn't become a formula).
 - Expect about 0.5–2 seconds per save or load. That's acceptable for this use.
 
 ### Storage schema: "layout 1", sheet2-style, 5 tabs (approved by the user 2026-11-17; Ideas tab added 2026-11-19)

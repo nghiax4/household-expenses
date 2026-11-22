@@ -23,7 +23,7 @@ export function collectUnpaidDebts(expenses: readonly Expense[], coversUpToId: n
   return expenses
     .filter((expense) => expense.deletedAt === null && expense.id <= coversUpToId)
     .flatMap((expense) =>
-      [...expense.people].flatMap(([person, cell]): Debt[] =>
+      Object.entries(expense.people).flatMap(([person, cell]): Debt[] =>
         cell.kind === 'share' && cell.status === 'Not paid' && person !== expense.payer
           ? [{ debtor: person, creditor: expense.payer, amount: cell.amount }]
           : [],

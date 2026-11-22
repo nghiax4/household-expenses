@@ -9,13 +9,13 @@ const PEOPLE = ['Anh', 'Bảo', 'Chi', 'Dương', 'Em', 'Giang', 'Hà'];
 
 /** Builds an expense from person cells written exactly as they appear in the sheet. */
 function expense(id: number, payer: PersonName, cells: string[], deletedAt?: string): Expense {
-  const people = new Map<PersonName, PersonCell>();
+  const people: Record<PersonName, PersonCell> = {};
   cells.forEach((text, i) => {
     const parsed = parsePersonCell(text);
     if (!parsed.ok) {
       throw new Error(parsed.error);
     }
-    people.set(PEOPLE[i]!, parsed.value);
+    people[PEOPLE[i]!] = parsed.value;
   });
   return {
     id,

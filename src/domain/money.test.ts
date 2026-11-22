@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { formatDollars, parseDollars } from './money';
+import { formatDollars, parseDollars, parseTypedAmount } from './money';
+
+describe('parseTypedAmount', () => {
+  it.each([
+    ['12', 1200],
+    ['12.5', 1250],
+    ['12.50', 1250],
+    ['12.', 1200],
+    ['.99', 99],
+    ['0.01', 1],
+    ['  $42.10 ', 4210],
+    ['$ 7', 700],
+    ['1,234.56', 123456],
+    ['1,234', 123400],
+    ['12,5', 1250],
+    ['12,50', 1250],
+  ])('reads %j as %i cents', (text, cents) => {
+    expect(parseTypedAmount(text)).toEqual({ ok: true, value: cents });
+  });
+
+  it.each([
+    ['', 'Enter an amount.'],
+    ['  ', 'Enter an amount.'],
+    ['$', 'Enter an amount.'],
+    ['.', '"." isn\'t an amount. Type it like 12.50.'],
+    ['abc', '"abc" isn\'t an amount. Type it like 12.50.'],
+    ['-5', '"-5" isn\'t an amount. Type it like 12.50.'],
+    ['1.2.3', '"1.2.3" isn\'t an amount. Type it like 12.50.'],
+    ['12.345', 'Use at most 2 decimals (cents).'],
+    ['0', 'The amount must be more than $0.00.'],
+    ['0.00', 'The amount must be more than $0.00.'],
+    ['99999999999999999', 'That amount is too large.'],
+  ])('rejects %j', (text, error) => {
+    expect(parseTypedAmount(text)).toEqual({ ok: false, error });
+  });
+});
 
 describe('formatDollars', () => {
   it.each([
