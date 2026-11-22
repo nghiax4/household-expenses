@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react';
 
-// Most requests finish in 1–2 seconds; the counter only appears for the slow ones.
-const SHOW_SECONDS_AFTER = 3;
-
 /**
- * A spinner with what's happening ("Saving…") and, once it's slow, for how long ("Saving… 5s"),
- * so a slow request visibly isn't frozen. The app gives up after a minute (see client.ts).
+ * A spinner with what's happening and for how long ("Saving… 0s", "Saving… 1s", …), so a slow
+ * request visibly isn't frozen. The app gives up after a minute (see client.ts).
  */
 export function Waiting({ label }: { label: string }) {
   const [started] = useState(() => Date.now());
@@ -23,7 +20,7 @@ export function Waiting({ label }: { label: string }) {
         className="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
       />
       <span>
-        {label}…{seconds >= SHOW_SECONDS_AFTER && ` ${seconds}s`}
+        {label}… {seconds}s
       </span>
     </span>
   );

@@ -302,7 +302,7 @@ test('a slow save shows a seconds counter, and gives up after a minute', async (
   await dialog.getByRole('button', { name: 'Save' }).click();
 
   const saving = dialog.getByRole('button', { name: /^Saving…/ });
-  await expect(saving).toHaveText('Saving…');
+  await expect(saving).toHaveText('Saving… 0s');
   await expect(saving).toBeDisabled();
   await page.clock.runFor(5_000);
   await expect(saving).toHaveText('Saving… 5s');
