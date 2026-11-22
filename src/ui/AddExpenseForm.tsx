@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type ExpensesData } from '../api/protocol';
 import { buildExpense, recentDescriptions, type NewExpense } from '../domain/expense';
-import { formatDollars, parseTypedAmount, sum, type Cents, type PersonName } from '../domain/money';
+import { parseTypedAmount, type PersonName } from '../domain/money';
 import { fail, ok, type Result } from '../domain/result';
-import { splitEqually } from '../domain/split';
+import { sharesFromTyped, type TypedSplit } from '../domain/split';
 import { localDate } from './dates';
-import { ShareChip } from './ShareChip';
+import { Choice } from './Choice';
+import { SplitPicker } from './SplitPicker';
 import { Waiting } from './Waiting';
 
 interface Props {
@@ -27,6 +28,7 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
   const [date, setDate] = useState(() => localDate(0));
   const [payer, setPayer] = useState<PersonName | null>(null);
   const [participants, setParticipants] = useState<ReadonlySet<PersonName>>(new Set());
+  const [typed, setTyped] = useState<TypedSplit>({ mode: 'equal', amounts: {}, percents: {} });
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -40,7 +42,7 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
   const yesterday = localDate(1);
   // Person-column order, whatever order they were tapped in.
   const chosen = people.filter((person) => participants.has(person));
-  const preview = previewShares(amountText, chosen, payer);
+  const total = parseTypedAmount(amountText);
   const recent = recentDescriptions(data.expenses, RECENT_DESCRIPTION_COUNT);
 
   function toggleParticipant(person: PersonName) {
@@ -55,14 +57,13 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
     if (description.trim() === '') {
       return fail('Add a description.');
     }
-    const total = parseTypedAmount(amountText);
     if (!total.ok) {
       return fail(total.error);
     }
     if (payer === null) {
       return fail('Pick who paid.');
     }
-    const shares = splitEqually(total.value, chosen, payer);
+    const shares = sharesFromTyped(total.value, chosen, payer, typed);
     if (!shares.ok) {
       return fail(shares.error);
     }
@@ -186,41 +187,15 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend className="mb-2 font-medium">Split equally between</legend>
-        <div className="flex flex-wrap gap-2">
-          {people.map((person) => (
-            <Choice
-              key={person}
-              selected={participants.has(person)}
-              onClick={() => toggleParticipant(person)}
-            >
-              {person}
-            </Choice>
-          ))}
-        </div>
-        {preview && (
-          <ul aria-label="Each person’s share" className="mt-3 flex flex-wrap gap-1.5">
-            {chosen.map((person) => (
-              <li key={person}>
-                <ShareChip
-                  person={person}
-                  amount={preview.get(person) ?? 0}
-                  status={person === payer ? 'Paid' : 'Not paid'}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        {/* Allowed on purpose (paying for others), but easy to do by a missed tap, so say what
-            it means. */}
-        {preview && payer !== null && !participants.has(payer) && (
-          <p className="mt-2 text-sm text-slate-600">
-            {payer} isn’t in the split, so {payer} is owed the full{' '}
-            {formatDollars(sum(preview.values()))}.
-          </p>
-        )}
-      </fieldset>
+      <SplitPicker
+        people={people}
+        total={total.ok ? total.value : null}
+        payer={payer}
+        participants={participants}
+        onToggleParticipant={toggleParticipant}
+        typed={typed}
+        onTypedChange={setTyped}
+      />
 
       <div className="flex flex-col gap-2">
         <label htmlFor="note" className="font-medium">
@@ -258,41 +233,5 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
         </button>
       </div>
     </form>
-  );
-}
-
-/** The equal split as it would be saved, or null until there's enough to show one. */
-function previewShares(
-  amountText: string,
-  participants: readonly PersonName[],
-  payer: PersonName | null,
-): ReadonlyMap<PersonName, Cents> | null {
-  const total = parseTypedAmount(amountText);
-  if (!total.ok || payer === null || participants.length === 0) {
-    return null;
-  }
-  const shares = splitEqually(total.value, participants, payer);
-  return shares.ok ? shares.value : null;
-}
-
-interface ChoiceProps {
-  selected: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}
-
-/** A pill that's dark when picked. Used for one-of-many and many-of-many choices alike. */
-function Choice({ selected, onClick, children }: ChoiceProps) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={`h-10 rounded-full border px-4 ${
-        selected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

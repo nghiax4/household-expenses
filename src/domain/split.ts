@@ -1,4 +1,4 @@
-import { formatDollars, sum, type Cents, type PersonName } from './money';
+import { formatDollars, parseTypedAmount, sum, type Cents, type PersonName } from './money';
 import { fail, ok, type Result } from './result';
 
 /** Each participant's share of an expense, in person-column order. */
@@ -6,7 +6,7 @@ export type Shares = ReadonlyMap<PersonName, Cents>;
 
 /** A percentage in hundredths of a percent, so it stays an integer: 12.5% is 1250. */
 export type BasisPoints = number;
-const ONE_HUNDRED_PERCENT: BasisPoints = 10_000;
+export const ONE_HUNDRED_PERCENT: BasisPoints = 10_000;
 
 /**
  * Splits a total equally. Cents that don't divide evenly go to the payer
@@ -101,4 +101,82 @@ function giveLeftoverCents(shares: Shares, leftover: Cents, payer: PersonName): 
     result.set(person, (result.get(person) ?? 0) + 1);
   }
   return result;
+}
+
+/** Reads a percentage someone typed: "50", "33.33", "12,5" (iPhone decimal comma), "25%". */
+export function parseTypedPercent(text: string): Result<BasisPoints> {
+  const trimmed = text.trim().replace(/%$/, '').trim().replace(',', '.');
+  if (trimmed === '') {
+    return fail('Enter a percentage.');
+  }
+  const match = /^(\d*)(?:\.(\d*))?$/.exec(trimmed);
+  const [, whole = '', fraction = ''] = match ?? [];
+  if (!match || whole + fraction === '') {
+    return fail(`"${text.trim()}" isn't a percentage. Type it like 33.5.`);
+  }
+  if (fraction.length > 2) {
+    return fail('Use at most 2 decimals, like 33.33.');
+  }
+  const value = Number(whole || '0') * 100 + Number(fraction.padEnd(2, '0'));
+  if (value === 0) {
+    return fail('The percentage must be more than 0%.');
+  }
+  if (value > ONE_HUNDRED_PERCENT) {
+    return fail('A percentage can be at most 100%.');
+  }
+  return ok(value);
+}
+
+/** Formats a percentage (0 or more) the way it would be typed, without "%": 1250 → "12.5". */
+export function formatPercent(value: BasisPoints): string {
+  const fraction = String(value % 100)
+    .padStart(2, '0')
+    .replace(/0+$/, '');
+  return `${Math.floor(value / 100)}${fraction === '' ? '' : `.${fraction}`}`;
+}
+
+/** How the Add form splits a total. The type isn't stored: only the resulting amounts are. */
+export type SplitMode = 'equal' | 'amounts' | 'percent';
+
+/** What the Add form has for a split: the mode, and the text typed in each person's box. */
+export interface TypedSplit {
+  mode: SplitMode;
+  amounts: Readonly<Record<PersonName, string>>;
+  percents: Readonly<Record<PersonName, string>>;
+}
+
+/**
+ * The shares a typed split gives, or the first problem with it (boxes are checked in
+ * person-column order, the order they're shown in).
+ */
+export function sharesFromTyped(
+  total: Cents,
+  participants: readonly PersonName[],
+  payer: PersonName,
+  typed: TypedSplit,
+): Result<Shares> {
+  if (typed.mode === 'equal') {
+    return splitEqually(total, participants, payer);
+  }
+  if (participants.length === 0) {
+    return fail('Pick at least one person to split with.');
+  }
+
+  const parse = typed.mode === 'amounts' ? parseTypedAmount : parseTypedPercent;
+  const boxes = typed.mode === 'amounts' ? typed.amounts : typed.percents;
+  const what = typed.mode === 'amounts' ? 'amount' : 'percentage';
+  const values = new Map<PersonName, number>();
+  for (const person of participants) {
+    const text = boxes[person] ?? '';
+    const value = parse(text);
+    if (!value.ok) {
+      return fail(
+        text.trim() === '' ? `Enter ${person}'s ${what}.` : `${person}'s ${what}: ${value.error}`,
+      );
+    }
+    values.set(person, value.value);
+  }
+  return typed.mode === 'amounts'
+    ? checkCustomSplit(total, values)
+    : splitByPercentages(total, values, payer);
 }

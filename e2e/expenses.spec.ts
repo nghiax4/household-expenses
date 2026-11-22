@@ -130,7 +130,7 @@ test('adds an equal split, checking the form before saving', async ({ page }) =>
   await expect(page.getByLabel('Pick a date')).toHaveValue(localDate(1));
 
   const paidBy = page.getByRole('group', { name: 'Paid by' });
-  const splitBetween = page.getByRole('group', { name: 'Split equally between' });
+  const splitBetween = page.getByRole('group', { name: 'Split between' });
   await paidBy.getByRole('button', { name: 'Bảo' }).click();
   await save.click();
   await expect(alert).toHaveText('Pick at least one person to split with.');
@@ -312,4 +312,50 @@ test('a slow save shows a seconds counter, and gives up after a minute', async (
     'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.',
   );
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
+});
+
+test('splits by typed amounts or percentages, starting from the equal split', async ({ page }) => {
+  const requests = await fakeBackend(page, START);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  await page.getByLabel('Description', { exact: true }).fill('Dinner');
+  await page.getByLabel('Total').fill('10');
+  await page.getByRole('group', { name: 'Paid by' }).getByRole('button', { name: 'Anh' }).click();
+  const between = page.getByRole('group', { name: 'Split between' });
+  await between.getByRole('button', { name: 'Anh' }).click();
+  await between.getByRole('button', { name: 'Chi' }).click();
+  const how = page.getByRole('group', { name: 'How to split' });
+  const anh = page.getByLabel("Anh's amount");
+  const chi = page.getByLabel("Chi's amount");
+
+  await how.getByRole('button', { name: 'Amounts' }).click();
+  await expect(anh).toHaveValue('5.00');
+  await expect(chi).toHaveValue('5.00');
+  await expect(page.getByText('✓ Adds up to $10.00')).toBeVisible();
+  // A tap in the middle of a box puts the cursor after the number, not before it: the iPhone
+  // keypad has no arrow keys to move it.
+  await chi.click();
+  expect(await chi.evaluate((input: HTMLInputElement) => input.selectionStart)).toBe(4);
+  await chi.fill('4');
+  await expect(page.getByText('$1.00 left to split')).toBeVisible();
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'The shares add up to $9.00, but the total is $10.00.',
+  );
+
+  await how.getByRole('button', { name: 'Percent' }).click();
+  const anhPercent = page.getByLabel("Anh's percentage");
+  await expect(anhPercent).toHaveValue('50');
+  await anhPercent.fill('70');
+  await expect(page.getByText('20% too much')).toBeVisible();
+  await page.getByLabel("Chi's percentage").fill('30');
+  await expect(page.getByText('✓ Adds up to 100%')).toBeVisible();
+  await expect(
+    page.getByRole('list', { name: 'Each person’s share' }).getByRole('listitem'),
+  ).toHaveText(['✓ Anh $7.00, paid', 'Chi $3.00, not paid']);
+
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: 'Add expense' })).toHaveCount(0);
+  const added = requests.at(-1);
+  expect(added?.action === 'addExpense' && added.expense.shares).toEqual({ Anh: 700, Chi: 300 });
 });

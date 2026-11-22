@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { sum } from './money';
 import {
   checkCustomSplit,
+  formatPercent,
   isEqualSplit,
+  parseTypedPercent,
+  sharesFromTyped,
   splitByPercentages,
   splitEqually,
   type Shares,
+  type TypedSplit,
 } from './split';
 
 // Made-up people (the repo is public). Diacritics on purpose: real names have them.
@@ -185,5 +189,114 @@ describe('isEqualSplit', () => {
       ['Dương', 3086],
     ]);
     expect(isEqualSplit(12345, wrongCent, 'Bảo')).toBe(false);
+  });
+});
+
+describe('parseTypedPercent', () => {
+  it.each([
+    ['50', 5000],
+    ['33.33', 3333],
+    ['12.5', 1250],
+    ['12,5', 1250],
+    [' 25% ', 2500],
+    ['.5', 50],
+    ['100', 10000],
+  ])('reads %j as %i hundredths of a percent', (text, value) => {
+    expect(parseTypedPercent(text)).toEqual({ ok: true, value });
+  });
+
+  it.each([
+    ['', 'Enter a percentage.'],
+    ['abc', '"abc" isn\'t a percentage. Type it like 33.5.'],
+    ['1.2.3', '"1.2.3" isn\'t a percentage. Type it like 33.5.'],
+    ['33.333', 'Use at most 2 decimals, like 33.33.'],
+    ['0', 'The percentage must be more than 0%.'],
+    ['100.01', 'A percentage can be at most 100%.'],
+  ])('rejects %j', (text, error) => {
+    expect(parseTypedPercent(text)).toEqual({ ok: false, error });
+  });
+});
+
+describe('formatPercent', () => {
+  it.each([
+    [5000, '50'],
+    [3333, '33.33'],
+    [1250, '12.5'],
+    [5, '0.05'],
+    [0, '0'],
+  ])('formats %i as %j', (value, text) => {
+    expect(formatPercent(value)).toBe(text);
+  });
+});
+
+describe('sharesFromTyped', () => {
+  const none = { amounts: {}, percents: {} };
+
+  it('splits equally, ignoring any typed boxes', () => {
+    const typed: TypedSplit = { ...none, mode: 'equal', amounts: { Anh: '99' } };
+    expect(sharesFromTyped(1000, ['Anh', 'Bảo', 'Chi'], 'Bảo', typed)).toEqual(
+      splitEqually(1000, ['Anh', 'Bảo', 'Chi'], 'Bảo'),
+    );
+  });
+
+  it('uses typed amounts that add up to the total', () => {
+    const typed: TypedSplit = { ...none, mode: 'amounts', amounts: { Anh: '6', Chi: '4.00' } };
+    expect(sharesFromTyped(1000, ['Anh', 'Chi'], 'Bảo', typed)).toEqual({
+      ok: true,
+      value: new Map([
+        ['Anh', 600],
+        ['Chi', 400],
+      ]),
+    });
+  });
+
+  it('turns percentages into amounts, the payer absorbing rounding', () => {
+    const typed: TypedSplit = {
+      ...none,
+      mode: 'percent',
+      percents: { Anh: '33.33', Bảo: '66.67' },
+    };
+    expect(sharesFromTyped(1001, ['Anh', 'Bảo'], 'Bảo', typed)).toEqual({
+      ok: true,
+      value: new Map([
+        ['Anh', 333],
+        ['Bảo', 668],
+      ]),
+    });
+  });
+
+  it.each<[string, TypedSplit, string]>([
+    ['an empty box', { ...none, mode: 'amounts', amounts: { Anh: '6' } }, "Enter Chi's amount."],
+    [
+      'a bad box, naming whose',
+      { ...none, mode: 'amounts', amounts: { Anh: '6', Chi: '4.5.' } },
+      'Chi\'s amount: "4.5." isn\'t an amount. Type it like 12.50.',
+    ],
+    [
+      'amounts that don’t add up',
+      { ...none, mode: 'amounts', amounts: { Anh: '6', Chi: '3' } },
+      'The shares add up to $9.00, but the total is $10.00.',
+    ],
+    [
+      'an empty percentage',
+      { ...none, mode: 'percent', percents: { Chi: '50' } },
+      "Enter Anh's percentage.",
+    ],
+    [
+      'percentages that don’t add up',
+      { ...none, mode: 'percent', percents: { Anh: '50', Chi: '40' } },
+      'The percentages add up to 90%, not 100%.',
+    ],
+  ])('explains %s', (_, typed, error) => {
+    expect(sharesFromTyped(1000, ['Anh', 'Chi'], 'Anh', typed)).toEqual({ ok: false, error });
+  });
+
+  it('asks for people first, whatever the mode', () => {
+    for (const mode of ['equal', 'amounts', 'percent'] as const) {
+      expect(sharesFromTyped(1000, [], 'Anh', { ...none, mode })).toEqual({
+        ok: false,
+        error: 'Pick at least one person to split with.',
+      });
+    }
   });
 });
