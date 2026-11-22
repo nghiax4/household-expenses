@@ -11,8 +11,8 @@ interface Props {
 export function ShareChip({ person, amount, status }: Props) {
   const paid = status === 'Paid';
   return (
-    <li
-      className={`rounded-full px-2.5 py-0.5 text-sm ${
+    <span
+      className={`inline-block rounded-full px-2.5 py-0.5 text-sm ${
         paid ? 'bg-green-100 text-green-900' : 'bg-red-700 text-white'
       }`}
     >
@@ -20,6 +20,6 @@ export function ShareChip({ person, amount, status }: Props) {
       {paid && <span aria-hidden="true">✓ </span>}
       {person} {formatDollars(amount)}
       <span className="sr-only">, {status.toLowerCase()}</span>
-    </li>
+    </span>
   );
 }

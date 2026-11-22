@@ -7,6 +7,7 @@ import { fail, ok, type Result } from '../domain/result';
 import { splitEqually } from '../domain/split';
 import { localDate } from './dates';
 import { ShareChip } from './ShareChip';
+import { Waiting } from './Waiting';
 
 interface Props {
   data: ExpensesData;
@@ -201,12 +202,13 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
         {preview && (
           <ul aria-label="Each person’s share" className="mt-3 flex flex-wrap gap-1.5">
             {chosen.map((person) => (
-              <ShareChip
-                key={person}
-                person={person}
-                amount={preview.get(person) ?? 0}
-                status={person === payer ? 'Paid' : 'Not paid'}
-              />
+              <li key={person}>
+                <ShareChip
+                  person={person}
+                  amount={preview.get(person) ?? 0}
+                  status={person === payer ? 'Paid' : 'Not paid'}
+                />
+              </li>
             ))}
           </ul>
         )}
@@ -252,7 +254,7 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
           disabled={saving}
           className="h-12 flex-1 rounded-lg bg-slate-900 font-medium text-white disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? <Waiting label="Saving" /> : 'Save'}
         </button>
       </div>
     </form>

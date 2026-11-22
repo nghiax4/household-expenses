@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test';
 import type { NewExpense } from '../src/domain/expense';
 import type { PersonCell } from '../src/domain/personCell';
 import { localDate } from '../src/ui/dates';
-import { fakeBackend, PEOPLE, rememberPasscode } from './fakeBackend';
+import { BACKEND_URL } from '../src/api/client';
+import type { ApiRequest } from '../src/api/protocol';
+import { fail } from '../src/domain/result';
+import { fakeBackend, PASSCODE, PEOPLE, rememberPasscode } from './fakeBackend';
 
 const NI: PersonCell = { kind: 'notInvolved' };
 const share = (amount: number, status: 'Paid' | 'Not paid'): PersonCell => ({
@@ -178,4 +181,135 @@ test('cancel leaves the list unchanged', async ({ page }) => {
     'Groceries',
   ]);
   expect(requests.map((r) => r.action)).not.toContain('addExpense');
+});
+
+test('marks who paid from a checklist, saving only on Save', async ({ page }) => {
+  const requests = await fakeBackend(page, START);
+  await page.goto('/');
+  const internet = page
+    .getByRole('list', { name: 'Expenses' })
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('heading', { name: 'Internet' }) });
+  const shares = internet.getByRole('list', { name: 'Shares' }).getByRole('listitem');
+  const dialog = page.getByRole('dialog', { name: 'Who has paid back for “Internet”?' });
+  const chi = dialog.getByRole('checkbox', { name: 'Chi paid back' });
+  const duong = dialog.getByRole('checkbox', { name: 'Dương paid back' });
+
+  // Cancel throws away the ticks and sends nothing.
+  await internet.getByRole('button', { name: 'Mark who paid' }).click();
+  await expect(dialog.getByRole('checkbox', { name: 'Anh paid back' })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: 'Bảo paid back' })).toHaveCount(0);
+  await expect(dialog).toContainText('Paid the bill');
+  await chi.check();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(shares).toHaveText([
+    '✓ Anh $10.00, paid',
+    '✓ Bảo $10.00, paid',
+    'Chi $10.00, not paid',
+    'Dương $10.00, not paid',
+  ]);
+  expect(requests.map((r) => r.action)).not.toContain('setShareStatuses');
+
+  // Several people in one Save; only what changed is sent.
+  await internet.getByRole('button', { name: 'Mark who paid' }).click();
+  await expect(chi).not.toBeChecked();
+  await chi.check();
+  await duong.check();
+  // The row shows the result before saving.
+  await expect(dialog.getByRole('listitem').filter({ hasText: 'Chi' })).toContainText('Paid back');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(shares).toHaveText([
+    '✓ Anh $10.00, paid',
+    '✓ Bảo $10.00, paid',
+    '✓ Chi $10.00, paid',
+    '✓ Dương $10.00, paid',
+  ]);
+  expect(requests.at(-1)).toEqual({
+    passcode: PASSCODE,
+    action: 'setShareStatuses',
+    expenseId: 2,
+    statuses: { Chi: 'Paid', Dương: 'Paid' },
+  });
+
+  // And back, for a mistaken tick.
+  await internet.getByRole('button', { name: 'Mark who paid' }).click();
+  await chi.uncheck();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(shares.nth(2)).toHaveText('Chi $10.00, not paid');
+});
+
+test('shows a refusal from the backend in the checklist', async ({ page }) => {
+  await fakeBackend(page, START);
+  await page.route(BACKEND_URL, async (route) => {
+    const request = route.request().postDataJSON() as ApiRequest;
+    if (request.action !== 'setShareStatuses') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      json: fail('Expense #2 is on rows 3 and 4 of the sheet. Fix that first.'),
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Mark who paid' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('checkbox', { name: 'Chi paid back' }).check();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'Expense #2 is on rows 3 and 4 of the sheet. Fix that first.',
+  );
+});
+
+test('an expense only the payer shares has nothing to mark', async ({ page }) => {
+  const coffee = {
+    id: 4,
+    date: localDate(0),
+    description: 'Coffee',
+    total: 300,
+    payer: 'Anh',
+    note: '',
+    deletedAt: null,
+    people: { Anh: share(300, 'Paid'), Bảo: NI, Chi: NI, Dương: NI },
+  };
+  await fakeBackend(page, { ...START, expenses: [...START.expenses, coffee] });
+  await page.goto('/');
+  const card = (name: string) =>
+    page
+      .getByRole('list', { name: 'Expenses' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('heading', { name }) });
+  await expect(card('Coffee').getByRole('heading')).toBeVisible();
+  await expect(card('Coffee').getByRole('button', { name: 'Mark who paid' })).toHaveCount(0);
+  await expect(card('Groceries').getByRole('button', { name: 'Mark who paid' })).toBeVisible();
+});
+
+test('a slow save shows a seconds counter, and gives up after a minute', async ({ page }) => {
+  await page.clock.install();
+  await fakeBackend(page, START);
+  // A backend that never answers this one request.
+  await page.route(BACKEND_URL, async (route) => {
+    const request = route.request().postDataJSON() as ApiRequest;
+    if (request.action !== 'setShareStatuses') {
+      await route.fallback();
+    }
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Mark who paid' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('checkbox', { name: 'Chi paid back' }).check();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+
+  const saving = dialog.getByRole('button', { name: /^Saving…/ });
+  await expect(saving).toHaveText('Saving…');
+  await expect(saving).toBeDisabled();
+  await page.clock.runFor(5_000);
+  await expect(saving).toHaveText('Saving… 5s');
+
+  await page.clock.runFor(55_000);
+  await expect(dialog.getByRole('alert')).toHaveText(
+    'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.',
+  );
+  await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
 });

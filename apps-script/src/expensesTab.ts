@@ -2,8 +2,19 @@
 // them, so the rules are unit-tested without Google services.
 import type { ExpensesData } from '../../src/api/protocol';
 import { isCalendarDate, type Expense } from '../../src/domain/expense';
-import { formatDollars, parseDollars, sum, type PersonName } from '../../src/domain/money';
-import { formatPersonCell, parsePersonCell, type PersonCell } from '../../src/domain/personCell';
+import {
+  formatDollars,
+  parseDollars,
+  sum,
+  type Cents,
+  type PersonName,
+} from '../../src/domain/money';
+import {
+  formatPersonCell,
+  parsePersonCell,
+  type PersonCell,
+  type ShareStatus,
+} from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
 import { TAB_HEADERS } from './schema';
 
@@ -68,9 +79,54 @@ export function expenseRow(expense: Expense, people: readonly PersonName[]): She
     literal(expense.payer),
     literal(expense.note),
     literal(expense.deletedAt ?? ''),
-    ...people.map((person) =>
-      literal(formatPersonCell(expense.people[person] ?? { kind: 'notInvolved' })),
-    ),
+    ...people.map((person) => personCell(expense, person)),
+  ];
+}
+
+/** What to write in `person`'s column of the expense's row. */
+export function personCell(expense: Expense, person: PersonName): SheetCell {
+  return literal(formatPersonCell(expense.people[person] ?? { kind: 'notInvolved' }));
+}
+
+/**
+ * Where an expense's row is: its sheet row number (the header is row 1). Refuses when the ID
+ * is on several rows, because a hand edit may have copied it and the wrong row could change.
+ */
+export function expenseRowNumber(rows: readonly (readonly string[])[], id: number): Result<number> {
+  const matches = rows.flatMap((row, index) =>
+    index > 0 && row[0] === String(id) ? [index + 1] : [],
+  );
+  const [rowNumber] = matches;
+  if (rowNumber === undefined) {
+    return fail(`Expense #${id} isn't in the sheet anymore. Reload the list.`);
+  }
+  if (matches.length > 1) {
+    return fail(`Expense #${id} is on rows ${matches.join(' and ')} of the sheet. Fix that first.`);
+  }
+  return ok(rowNumber);
+}
+
+/** The sheet column (A = 1) of a person's cells. */
+export function personColumn(people: readonly PersonName[], person: PersonName): number {
+  return FIXED_HEADERS.length + people.indexOf(person) + 1;
+}
+
+/** The Activity entry for marking a share, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.` */
+export function shareStatusActivity(
+  time: string,
+  expense: Expense,
+  person: PersonName,
+  amount: Cents,
+  status: ShareStatus,
+): SheetCell[] {
+  const before: ShareStatus = status === 'Paid' ? 'Not paid' : 'Paid';
+  const details =
+    `#${expense.id} "${expense.description}": ${person} ${formatDollars(amount)}, ` +
+    `${before} → ${status}.`;
+  return [
+    literal(time),
+    literal(status === 'Paid' ? 'Marked paid' : 'Marked not paid'),
+    literal(details),
   ];
 }
 

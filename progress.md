@@ -15,7 +15,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user corrects data directly in the sheet. Always re-read the live sheet at import time.
 
 ## Current status
-**Phase 3: MVP screens.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The real storage sheet exists (5 tabs; ID in private notes) and holds only test expense #1. The backend (deployed 2026-11-21) checks the passcode, lists expenses and adds expenses (with a lock and an Activity entry). The app has the passcode screen, the **expense list** and the **Add expense form** (equal split), pushed 2026-11-22 and live. Both work against the live backend: on 2026-11-22 the user added test expense #1 ("TEST phone check lol", $1.01) from their iPhone, and the row, person cells and Activity entry were correct in the real sheet. That row should go to the trash once trash exists (ask first). `src/domain/` holds the money logic, fully unit-tested. Typing uses the iPhone keyboard (spec in `docs/requirements.md` → "Input").
+**Phase 3: MVP screens.** The site is live at https://nghiax4.github.io/household-expenses/ (public repo `nghiax4/household-expenses`, auto-deployed from `main`). The real storage sheet exists (5 tabs; ID in private notes) and holds only test expense #1. The backend (redeployed 2026-11-22) checks the passcode, lists and adds expenses, and marks shares paid (each write under a lock, with Activity entries). The app has the passcode screen, the **expense list** and the **Add expense form** (equal split), pushed 2026-11-22 and live. Both work against the live backend: on 2026-11-22 the user added test expense #1 ("TEST phone check lol", $1.01) from their iPhone, and the row, person cells and Activity entry were correct in the real sheet. That row should go to the trash once trash exists (ask first). **Marking shares paid** (a "Mark who paid" checklist on each card, one Save) is built, tested, deployed on the backend and tried on the phone, and every wait now shows a spinner with a seconds counter (the app gives up after 60 s); both pushed 2026-11-22. `src/domain/` holds the money logic, fully unit-tested. Typing uses the iPhone keyboard (spec in `docs/requirements.md` → "Input").
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
@@ -24,7 +24,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
 4. ~~Delete the two empty "Who" columns~~ (done 2026-11-20). The backup copy can be trashed once the user is happy (ask first).
-5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22. Next: Paid toggles → custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Every write needs an Activity entry (the lock already covers every request).
+5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ built 2026-11-22 (the user tries the checklist on the phone, then commit). Next: custom/% splits → templates → settlements → activity log + trash → search/filter → "what I owe" → Ideas screen. Every write needs an Activity entry (the lock already covers every request).
 6. Import sheet2 (copy the storage sheet first; ask about rows with no date).
 
 ## Open questions
@@ -33,12 +33,16 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
 
-### 2026-11-22 (real-sheet test + payer hint)
+### 2026-11-22 (real-sheet test, payer hint, Paid toggles, loading)
 - Session start: no notes in the Ideas tab. All checks passed on last session's uncommitted work.
 - The user added a test expense from their iPhone (dev server over Wi-Fi) with the payer **left out of the split** on purpose. The real sheet read back correct: row #1, the extra cents going to the first people in column order, and the Activity entry.
 - The user asked whether a payer outside the split should be allowed. It's in the spec on purpose (paying only for others), so the user kept it, and the Add form now shows a hint under the share preview when it happens. E2E test extended; iPhone screenshot checked with made-up data. Spec in `docs/requirements.md`.
 - Links given to the user are plain (no `/u/1/`): they use several Chrome profiles.
-- Committed and pushed (with the 2026-11-21 work) at the user's OK. Not done yet: Paid toggles.
+- Committed and pushed (with the 2026-11-21 work) at the user's OK.
+- Built **Paid toggles**, first as tappable chips with an "ask first" box (backend action `setShareStatus`). The user tried it on the phone (worked) but found the chips didn't look tappable. After comparing six designs (mockups in chat), they chose **F**: plain chips plus a **Mark who paid** button that opens a checklist (checkbox + colored chip + "Paid back" / "Not paid"; the payer's row says "Paid the bill"), saved with one Save. The backend action became `setShareStatuses` (only changed shares, checked all-or-nothing, one Activity row each); shared rule `withShareStatuses` in `src/domain/expense.ts`. 165 unit and 20 e2e tests pass; iPhone screenshots of the cards and checklist checked. Backend redeployed (user's OK) and checked with a refused request that wrote nothing.
+- The user tried the checklist on their iPhone against the real sheet: "works well".
+- Added a **spinner with a seconds counter** to every wait and a **60-second give-up** in `src/api/client.ts` (before, the app had no time limit of its own). New `src/ui/Waiting.tsx`; e2e test fast-forwards the clock against a backend that never answers. 165 unit and 22 e2e tests pass; iPhone screenshots of the counter and the give-up message checked.
+- Committed and pushed (user's OK).
 
 ### 2026-11-21 (expense list + add form)
 - Session start: no notes in the Ideas tab. Committed and pushed the 2026-11-20 work first (user's OK). Backup copy of the storage sheet kept for now.

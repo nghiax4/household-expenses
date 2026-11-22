@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
 import { BACKEND_URL } from '../src/api/client';
 import { WRONG_PASSCODE, type ApiRequest, type ExpensesData } from '../src/api/protocol';
-import { buildExpense } from '../src/domain/expense';
-import { fail, ok } from '../src/domain/result';
+import { buildExpense, withShareStatuses, type Expense } from '../src/domain/expense';
+import { fail, ok, type Result } from '../src/domain/result';
 
 // Made-up people (the repo is public), in person-column order.
 export const PEOPLE = ['Anh', 'Bảo', 'Chi', 'Dương'];
@@ -10,7 +10,7 @@ export const PASSCODE = '2468';
 
 /**
  * A stand-in for the real backend, so tests never touch the household's sheet. It keeps
- * expenses in memory and checks new ones with the same rules as the real backend. Returns
+ * expenses in memory and checks changes with the same rules as the real backend. Returns
  * every request it received, newest last.
  */
 export async function fakeBackend(
@@ -40,6 +40,20 @@ export async function fakeBackend(
           data = { ...data, expenses: [...data.expenses, expense.value] };
         }
         await route.fulfill({ json: expense.ok ? ok(data) : expense });
+        return;
+      }
+      case 'setShareStatuses': {
+        const expense = data.expenses.find((e) => e.id === request.expenseId);
+        const updated: Result<Expense> = expense
+          ? withShareStatuses(expense, request.statuses)
+          : fail(`Expense #${request.expenseId} isn't in the sheet anymore. Reload the list.`);
+        if (updated.ok) {
+          data = {
+            ...data,
+            expenses: data.expenses.map((e) => (e.id === request.expenseId ? updated.value : e)),
+          };
+        }
+        await route.fulfill({ json: updated.ok ? ok(data) : updated });
         return;
       }
     }

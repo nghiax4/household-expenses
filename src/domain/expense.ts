@@ -1,5 +1,5 @@
 import type { Cents, PersonName } from './money';
-import type { PersonCell } from './personCell';
+import type { PersonCell, ShareStatus } from './personCell';
 import { fail, ok, type Result } from './result';
 import { checkCustomSplit } from './split';
 
@@ -102,6 +102,44 @@ export function buildExpense(
     deletedAt: null,
     people: Object.fromEntries(cells),
   });
+}
+
+/**
+ * The expense with `person`'s share marked `status`, e.g. when they pay it back. The backend
+ * applies it, and the app's test backend uses the same rules.
+ */
+export function withShareStatus(
+  expense: Expense,
+  person: PersonName,
+  status: ShareStatus,
+): Result<Expense> {
+  if (expense.deletedAt !== null) {
+    return fail(`"${expense.description}" is in the trash.`);
+  }
+  const cell = expense.people[person];
+  if (cell?.kind !== 'share') {
+    return fail(`${person} isn't part of "${expense.description}".`);
+  }
+  if (person === expense.payer) {
+    return fail(`${person} paid for "${expense.description}", so their share is always Paid.`);
+  }
+  return ok({ ...expense, people: { ...expense.people, [person]: { ...cell, status } } });
+}
+
+/** `withShareStatus` for several people at once: all of them, or none if any is refused. */
+export function withShareStatuses(
+  expense: Expense,
+  statuses: Readonly<Record<PersonName, ShareStatus>>,
+): Result<Expense> {
+  let result = expense;
+  for (const [person, status] of Object.entries(statuses)) {
+    const next = withShareStatus(result, person, status);
+    if (!next.ok) {
+      return next;
+    }
+    result = next.value;
+  }
+  return ok(result);
 }
 
 /** Live expenses (not in the trash), latest date first; same-day expenses newest-added first. */

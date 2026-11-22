@@ -44,6 +44,14 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Problems are explained one at a time on Save, in form order; the backend re-checks everything. While saving, the buttons are disabled so a double tap can't add the expense twice.
 - If a saved passcode stops working (it was changed), the app forgets it and asks again.
 
+### Marking shares paid (built 2026-11-22)
+- The chips on a card are plain (not tappable). Below them, a **Mark who paid** button opens a checklist: "Who has paid back for "Internet"?". Each participant has a row with a checkbox, their chip (red/green, following the tick) and "Paid back" / "Not paid". The payer's row has no checkbox and says **"Paid the bill"**: their share counts as settled because they fronted the whole bill. The button is hidden when the payer is the only one in the split.
+- Nothing is saved until **Save** (Cancel discards), so a stray tick can be undone. Several people can be marked in one Save. Unticking a green row sets it back to Not paid.
+- Screen words vs storage: "Paid back" and "Paid the bill" are only on screen; the sheet keeps "Paid" / "Not paid".
+- The app sends only the shares that changed, each with its **new status** (not "toggle"), so a phone showing an old list can't flip a share back or overwrite another phone's change to someone else. Shares already at that status are neither written nor logged.
+- The backend checks every change before writing any, and refuses the whole Save for the payer's share, someone not involved, an expense in the trash, an ID it can't find, an ID on two rows, or a row it can't read. Otherwise it rewrites each changed person cell, adds one Activity row per person (`Marked paid` / `Marked not paid`, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.`), and returns the tab read back.
+- Still to come with settlements: refuse shares locked by a pending settlement ("covered by settlement #K").
+
 ## Quick-add templates (recurring bills)
 - Saved presets: name, payer, participants, plus an optional default amount. **Templates always split equally** (MVP). The user can switch to a custom or percentage split on the pre-filled form before saving.
 - Templates are created and edited in the app. They don't affect balances.
@@ -95,6 +103,8 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
   - Money is stored in the sheet as dollars with 2 decimals (readable) and converted to integer cents in code.
   - The backend reads cells **as the sheet displays them** and writes: Date as a real date shown `yyyy-mm-dd`, Total as a number shown `$#,##0.00`, ID as a number, and all other text as literal text (a hidden leading apostrophe, so "1/2" doesn't become a date and "=…" doesn't become a formula).
 - Expect about 0.5–2 seconds per save or load. That's acceptable for this use.
+- **While waiting** (loading the list, checking the passcode, any Save), the app shows a spinning circle with what it's doing ("Saving…"), and from 3 seconds on, how long it's been ("Saving… 5s"). A real progress bar isn't possible: the backend sends one answer at the end and nothing in between.
+- **The app gives up after 60 seconds** without an answer (added 2026-11-22). Without that, a hung request would wait until Safari or Google gave up, anywhere from about 1 to 6 minutes. For a save, the message warns that it may still have saved and to check the list before retrying, because a blind retry could add the same expense twice. (The backend itself waits up to 30 seconds for its turn behind another phone's request, and Google stops any script after 6 minutes.)
 
 ### Storage schema: "layout 1", sheet2-style, 5 tabs (approved by the user 2026-11-17; Ideas tab added 2026-11-19)
 | Tab | Columns | Notes |

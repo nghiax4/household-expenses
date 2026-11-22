@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { callBackend } from '../api/client';
+import { Waiting } from './Waiting';
 
 interface Props {
   onUnlocked: (passcode: string) => void;
@@ -57,7 +58,7 @@ export function PasscodeScreen({ onUnlocked }: Props) {
         disabled={checking || passcode === ''}
         className="rounded-lg bg-slate-900 px-4 py-3 text-base font-medium text-white disabled:opacity-50"
       >
-        {checking ? 'Checking…' : 'Continue'}
+        {checking ? <Waiting label="Checking" /> : 'Continue'}
       </button>
     </form>
   );

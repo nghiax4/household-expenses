@@ -1,11 +1,16 @@
 import { WRONG_PASSCODE, type ApiRequest, type ExpensesData } from '../../src/api/protocol';
-import { buildExpense, type NewExpense } from '../../src/domain/expense';
+import { buildExpense, withShareStatuses, type NewExpense } from '../../src/domain/expense';
+import type { ShareStatus } from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
 import {
   addedExpenseActivity,
   expenseRow,
+  expenseRowNumber,
   nextExpenseId,
+  personCell,
+  personColumn,
   readExpensesTab,
+  shareStatusActivity,
   type SheetCell,
 } from './expensesTab';
 import type { TabName } from './schema';
@@ -16,6 +21,8 @@ export interface SheetStorage {
   readTab(tab: TabName): string[][];
   /** Adds one row below the last row of the tab. */
   appendRow(tab: TabName, cells: readonly SheetCell[]): void;
+  /** Overwrites one cell. Row and column count from 1, as in the sheet (A1 is 1, 1). */
+  setCell(tab: TabName, row: number, column: number, cell: SheetCell): void;
 }
 
 /** Everything a request may need from outside, passed in so the handler can be unit-tested. */
@@ -48,6 +55,8 @@ export function handleRequest(rawBody: string, backend: Backend): Result<unknown
       return readExpensesTab(backend.storage.readTab('Expenses'));
     case 'addExpense':
       return addExpense(request.expense, backend);
+    case 'setShareStatuses':
+      return setShareStatuses(request, backend);
   }
 }
 
@@ -69,6 +78,52 @@ function addExpense(input: NewExpense, { storage, now }: Backend): Result<Expens
   return readExpensesTab(storage.readTab('Expenses'));
 }
 
+function setShareStatuses(
+  { expenseId, statuses }: ShareStatusesRequest,
+  { storage, now }: Backend,
+): Result<ExpensesData> {
+  const rows = storage.readTab('Expenses');
+  const current = readExpensesTab(rows);
+  if (!current.ok) {
+    return current;
+  }
+  const { people, expenses } = current.value;
+  const rowNumber = expenseRowNumber(rows, expenseId);
+  if (!rowNumber.ok) {
+    return fail(rowNumber.error);
+  }
+  const expense = expenses.find((e) => e.id === expenseId);
+  if (!expense) {
+    return fail(`Expense #${expenseId} can't be read. Fix its row in the sheet first.`);
+  }
+  // Every change is checked before anything is written, so a refusal leaves the sheet as it was.
+  const updated = withShareStatuses(expense, statuses);
+  if (!updated.ok) {
+    return fail(updated.error);
+  }
+
+  for (const person of people) {
+    const before = expense.people[person];
+    const after = updated.value.people[person];
+    // Unchanged shares (say, another phone got there first) are neither written nor logged.
+    if (before?.kind === 'share' && after?.kind === 'share' && before.status !== after.status) {
+      storage.setCell(
+        'Expenses',
+        rowNumber.value,
+        personColumn(people, person),
+        personCell(updated.value, person),
+      );
+      storage.appendRow(
+        'Activity',
+        shareStatusActivity(now(), expense, person, after.amount, after.status),
+      );
+    }
+  }
+  return readExpensesTab(storage.readTab('Expenses'));
+}
+
+type ShareStatusesRequest = Extract<ApiRequest, { action: 'setShareStatuses' }>;
+
 /** Checks the shape of a request. Business rules (who exists, sums) are checked later. */
 function parseRequest(rawBody: string): ApiRequest | null {
   let body: unknown;
@@ -89,6 +144,21 @@ function parseRequest(rawBody: string): ApiRequest | null {
     case 'addExpense': {
       const expense = parseNewExpense(body.expense);
       return expense && { passcode, action, expense };
+    }
+    case 'setShareStatuses': {
+      const { expenseId, statuses } = body;
+      if (
+        typeof expenseId !== 'number' ||
+        !Number.isSafeInteger(expenseId) ||
+        !isRecord(statuses)
+      ) {
+        return null;
+      }
+      const entries = Object.entries(statuses);
+      if (!entries.every((entry): entry is [string, ShareStatus] => isShareStatus(entry[1]))) {
+        return null;
+      }
+      return { passcode, action, expenseId, statuses: Object.fromEntries(entries) };
     }
     default:
       return null;
@@ -119,4 +189,8 @@ function parseNewExpense(value: unknown): NewExpense | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isShareStatus(value: unknown): value is ShareStatus {
+  return value === 'Paid' || value === 'Not paid';
 }

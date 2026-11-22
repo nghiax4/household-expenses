@@ -66,6 +66,13 @@ function sheetStorage(spreadsheetId: string | null): SheetStorage {
       });
       row.setValues([cells.map((cell) => cell.value)]);
     },
+    setCell: (name, row, column, cell: SheetCell) => {
+      const range = tab(name).getRange(row, column);
+      if (cell.numberFormat) {
+        range.setNumberFormat(cell.numberFormat);
+      }
+      range.setValue(cell.value);
+    },
   };
 }
 

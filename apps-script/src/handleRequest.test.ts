@@ -32,6 +32,13 @@ function fakeStorage(people: string[]): SheetStorage & { tabs: Record<TabName, s
     appendRow: (tab, cells) => {
       tabs[tab].push(cells.map(display));
     },
+    setCell: (tab, row, column, cell) => {
+      const cells = tabs[tab][row - 1];
+      if (!cells) {
+        throw new Error(`No row ${row} in ${tab}`);
+      }
+      cells[column - 1] = display(cell);
+    },
   };
 }
 
@@ -101,6 +108,24 @@ describe('handleRequest: passcode and request shape', () => {
           note: '',
           shares: { Anh: '10' },
         },
+      }),
+    ],
+    [
+      'setShareStatuses with a lowercase status',
+      body({
+        passcode: PASSCODE,
+        action: 'setShareStatuses',
+        expenseId: 1,
+        statuses: { Anh: 'paid' },
+      }),
+    ],
+    [
+      'setShareStatuses with a text ID',
+      body({
+        passcode: PASSCODE,
+        action: 'setShareStatuses',
+        expenseId: '1',
+        statuses: { Anh: 'Paid' },
       }),
     ],
   ])('rejects a malformed request (%s)', (_, raw) => {
@@ -209,5 +234,114 @@ describe('handleRequest: expenses', () => {
     expect(result.ok && result.value.problems).toEqual([
       'Row 2: the date "not a date" isn\'t a date written like 2026-11-21.',
     ]);
+  });
+});
+
+describe('handleRequest: marking shares paid', () => {
+  // Bảo paid $10.00 for Anh, Bảo and Chi; Dương wasn't involved.
+  const PIZZA_ROW = [
+    '1',
+    '2026-11-20',
+    'Pizza',
+    '$10.00',
+    'Bảo',
+    '',
+    '',
+    '$3.33 · Not paid',
+    '$3.34 · Paid',
+    '$3.33 · Not paid',
+    'Not involved',
+  ];
+
+  function withPizza() {
+    const storage = fakeStorage(['Anh', 'Bảo', 'Chi', 'Dương']);
+    storage.tabs.Expenses.push([...PIZZA_ROW]);
+    return storage;
+  }
+
+  const mark = (b: Backend, statuses: Record<string, string>, expenseId = 1) =>
+    handleRequest(
+      body({ passcode: PASSCODE, action: 'setShareStatuses', expenseId, statuses }),
+      b,
+    ) as ApiResponse<'setShareStatuses'>;
+
+  it('marks several shares at once, logging each change and returning the tab read back', () => {
+    const storage = withPizza();
+    const result = mark(backend(storage), { Chi: 'Paid', Anh: 'Paid' });
+    expect(storage.tabs.Expenses[1]).toEqual([
+      ...PIZZA_ROW.slice(0, 7),
+      '$3.33 · Paid',
+      '$3.34 · Paid',
+      '$3.33 · Paid',
+      'Not involved',
+    ]);
+    // Logged in column order, whatever order they came in.
+    expect(storage.tabs.Activity.slice(1)).toEqual([
+      ['2026-11-21 14:05', 'Marked paid', '#1 "Pizza": Anh $3.33, Not paid → Paid.'],
+      ['2026-11-21 14:05', 'Marked paid', '#1 "Pizza": Chi $3.33, Not paid → Paid.'],
+    ]);
+    expect(result.ok && result.value.expenses[0]?.people.Chi).toEqual({
+      kind: 'share',
+      amount: 333,
+      status: 'Paid',
+    });
+
+    mark(backend(storage), { Chi: 'Not paid' });
+    expect(storage.tabs.Expenses[1]?.[9]).toBe('$3.33 · Not paid');
+    expect(storage.tabs.Activity.at(-1)).toEqual([
+      '2026-11-21 14:05',
+      'Marked not paid',
+      '#1 "Pizza": Chi $3.33, Paid → Not paid.',
+    ]);
+  });
+
+  it('writes and logs only the shares that actually change', () => {
+    const storage = withPizza();
+    expect(mark(backend(storage), { Anh: 'Not paid', Chi: 'Paid' }).ok).toBe(true);
+    expect(storage.tabs.Expenses[1]?.[7]).toBe('$3.33 · Not paid');
+    expect(storage.tabs.Activity).toHaveLength(2);
+  });
+
+  it.each([
+    [
+      'the payer',
+      { Anh: 'Paid', Bảo: 'Paid' },
+      1,
+      'Bảo paid for "Pizza", so their share is always Paid.',
+    ],
+    ['someone not involved', { Anh: 'Paid', Dương: 'Paid' }, 1, 'Dương isn\'t part of "Pizza".'],
+    [
+      'an expense that isn’t there',
+      { Anh: 'Paid' },
+      9,
+      "Expense #9 isn't in the sheet anymore. Reload the list.",
+    ],
+  ])(
+    'refuses %s and writes nothing, not even the valid changes',
+    (_, statuses, expenseId, error) => {
+      const storage = withPizza();
+      expect(mark(backend(storage), statuses, expenseId)).toEqual({ ok: false, error });
+      expect(storage.tabs.Expenses[1]).toEqual(PIZZA_ROW);
+      expect(storage.tabs.Activity).toHaveLength(1);
+    },
+  );
+
+  it('refuses when a hand edit put the same ID on two rows, even if one is broken', () => {
+    const storage = withPizza();
+    storage.tabs.Expenses.splice(1, 0, ['1', 'not a date', 'Copy', '$1.00', 'Anh']);
+    expect(mark(backend(storage), { Anh: 'Paid' })).toEqual({
+      ok: false,
+      error: 'Expense #1 is on rows 2 and 3 of the sheet. Fix that first.',
+    });
+    expect(storage.tabs.Activity).toHaveLength(1);
+  });
+
+  it('refuses a row it can’t read', () => {
+    const storage = withPizza();
+    storage.tabs.Expenses[1] = [...PIZZA_ROW.slice(0, 7), 'oops', ...PIZZA_ROW.slice(8)];
+    expect(mark(backend(storage), { Chi: 'Paid' })).toEqual({
+      ok: false,
+      error: "Expense #1 can't be read. Fix its row in the sheet first.",
+    });
   });
 });

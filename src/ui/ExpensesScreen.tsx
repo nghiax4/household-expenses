@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type ExpensesData } from '../api/protocol';
-import { liveExpensesNewestFirst } from '../domain/expense';
+import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
 import { AddExpenseForm } from './AddExpenseForm';
 import { localDate } from './dates';
 import { ExpenseCard } from './ExpenseCard';
+import { Waiting } from './Waiting';
+import { WhoPaidDialog } from './WhoPaidDialog';
 
 interface Props {
   passcode: string;
@@ -21,6 +23,8 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [adding, setAdding] = useState(false);
+  // The expense whose "Mark who paid" checklist is open.
+  const [marking, setMarking] = useState<Expense | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -42,7 +46,11 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
   }, [passcode, attempt, onPasscodeRejected]);
 
   if (loading.state === 'loading') {
-    return <p className="mt-6 text-slate-600">Loading expenses…</p>;
+    return (
+      <p className="mt-6 text-slate-600">
+        <Waiting label="Loading expenses" />
+      </p>
+    );
   }
   if (loading.state === 'failed') {
     return (
@@ -109,9 +117,28 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
       ) : (
         <ul aria-label="Expenses" className="flex flex-col gap-3">
           {expenses.map((expense) => (
-            <ExpenseCard key={expense.id} expense={expense} people={data.people} today={today} />
+            <ExpenseCard
+              key={expense.id}
+              expense={expense}
+              people={data.people}
+              today={today}
+              onMarkWhoPaid={() => setMarking(expense)}
+            />
           ))}
         </ul>
+      )}
+      {marking && (
+        <WhoPaidDialog
+          expense={marking}
+          people={data.people}
+          passcode={passcode}
+          onSaved={(saved) => {
+            setLoading({ state: 'ready', data: saved });
+            setMarking(null);
+          }}
+          onCancel={() => setMarking(null)}
+          onPasscodeRejected={onPasscodeRejected}
+        />
       )}
     </div>
   );

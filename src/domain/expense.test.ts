@@ -4,6 +4,8 @@ import {
   isCalendarDate,
   liveExpensesNewestFirst,
   recentDescriptions,
+  withShareStatus,
+  withShareStatuses,
   type Expense,
   type NewExpense,
 } from './expense';
@@ -128,5 +130,89 @@ describe('recentDescriptions', () => {
     expect(recentDescriptions(expenses, 10)).toEqual(['Phở', 'Groceries', 'Rent']);
     expect(recentDescriptions(expenses, 2)).toEqual(['Phở', 'Groceries']);
     expect(recentDescriptions([], 5)).toEqual([]);
+  });
+});
+
+describe('withShareStatus', () => {
+  const internet: Expense = {
+    id: 2,
+    date: '2026-11-20',
+    description: 'Internet',
+    total: 3000,
+    payer: 'Anh',
+    note: '',
+    deletedAt: null,
+    people: {
+      Anh: { kind: 'share', amount: 1000, status: 'Paid' },
+      Bảo: { kind: 'share', amount: 1000, status: 'Not paid' },
+      Chi: { kind: 'share', amount: 1000, status: 'Not paid' },
+      Dương: { kind: 'notInvolved' },
+    },
+  };
+
+  it('changes only that person’s status, in both directions', () => {
+    const paid = withShareStatus(internet, 'Bảo', 'Paid');
+    expect(paid.ok && paid.value).toEqual({
+      ...internet,
+      people: { ...internet.people, Bảo: { kind: 'share', amount: 1000, status: 'Paid' } },
+    });
+    const back = paid.ok ? withShareStatus(paid.value, 'Bảo', 'Not paid') : paid;
+    expect(back).toEqual({ ok: true, value: internet });
+  });
+
+  it('allows setting the status a share already has', () => {
+    expect(withShareStatus(internet, 'Chi', 'Not paid')).toEqual({ ok: true, value: internet });
+  });
+
+  it.each([
+    ['the payer', internet, 'Anh', 'Anh paid for "Internet", so their share is always Paid.'],
+    ['someone not involved', internet, 'Dương', 'Dương isn\'t part of "Internet".'],
+    ['someone not in the household', internet, 'Zed', 'Zed isn\'t part of "Internet".'],
+    [
+      'an expense in the trash',
+      { ...internet, deletedAt: '2026-11-21 10:00' },
+      'Bảo',
+      '"Internet" is in the trash.',
+    ],
+  ])('refuses %s', (_, expense, person, error) => {
+    expect(withShareStatus(expense, person, 'Paid')).toEqual({ ok: false, error });
+  });
+});
+
+describe('withShareStatuses', () => {
+  const lunch: Expense = {
+    id: 3,
+    date: '2026-11-20',
+    description: 'Lunch',
+    total: 900,
+    payer: 'Anh',
+    note: '',
+    deletedAt: null,
+    people: {
+      Anh: { kind: 'share', amount: 300, status: 'Paid' },
+      Bảo: { kind: 'share', amount: 300, status: 'Not paid' },
+      Chi: { kind: 'share', amount: 300, status: 'Paid' },
+      Dương: { kind: 'notInvolved' },
+    },
+  };
+
+  it('applies every change', () => {
+    const result = withShareStatuses(lunch, { Bảo: 'Paid', Chi: 'Not paid' });
+    expect(result.ok && result.value.people).toEqual({
+      ...lunch.people,
+      Bảo: { kind: 'share', amount: 300, status: 'Paid' },
+      Chi: { kind: 'share', amount: 300, status: 'Not paid' },
+    });
+  });
+
+  it('refuses all of them when one is refused', () => {
+    expect(withShareStatuses(lunch, { Bảo: 'Paid', Dương: 'Paid' })).toEqual({
+      ok: false,
+      error: 'Dương isn\'t part of "Lunch".',
+    });
+  });
+
+  it('changes nothing for an empty list', () => {
+    expect(withShareStatuses(lunch, {})).toEqual({ ok: true, value: lunch });
   });
 });

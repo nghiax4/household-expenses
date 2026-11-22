@@ -2,6 +2,7 @@
 // sides, so they can't disagree.
 import type { Expense, NewExpense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
+import type { ShareStatus } from '../domain/personCell';
 import type { Result } from '../domain/result';
 
 /** Every request carries the household passcode; the backend rejects it otherwise. */
@@ -9,6 +10,12 @@ export type ApiRequest = { passcode: string } & (
   | { action: 'checkPasscode' }
   | { action: 'listExpenses' }
   | { action: 'addExpense'; expense: NewExpense }
+  // The new statuses rather than "toggle", so a phone showing an old list can't flip one back.
+  | {
+      action: 'setShareStatuses';
+      expenseId: number;
+      statuses: Record<PersonName, ShareStatus>;
+    }
 );
 
 export type ApiAction = ApiRequest['action'];
@@ -32,6 +39,8 @@ export interface ApiResults {
   listExpenses: ExpensesData;
   /** The whole tab again, read back after saving, so the app shows exactly what's stored. */
   addExpense: ExpensesData;
+  /** Read back the same way. */
+  setShareStatuses: ExpensesData;
 }
 
 export type ApiResponse<A extends ApiAction> = Result<ApiResults[A]>;
