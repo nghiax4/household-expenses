@@ -32,6 +32,9 @@ function fakeStorage(people: string[]): SheetStorage & { tabs: Record<TabName, s
     appendRow: (tab, cells) => {
       tabs[tab].push(cells.map(display));
     },
+    setRow: (tab, row, cells) => {
+      tabs[tab][row - 1] = cells.map(display);
+    },
     setCell: (tab, row, column, cell) => {
       const cells = tabs[tab][row - 1];
       if (!cells) {
@@ -127,6 +130,14 @@ describe('handleRequest: passcode and request shape', () => {
         expenseId: '1',
         statuses: { Anh: 'Paid' },
       }),
+    ],
+    [
+      'editExpense without an expense',
+      body({ passcode: PASSCODE, action: 'editExpense', expenseId: 1 }),
+    ],
+    [
+      'deleteExpense with a text ID',
+      body({ passcode: PASSCODE, action: 'deleteExpense', expenseId: '1' }),
     ],
   ])('rejects a malformed request (%s)', (_, raw) => {
     expect(handleRequest(raw, backend())).toEqual({
@@ -363,6 +374,143 @@ describe('handleRequest: marking shares paid', () => {
     expect(mark(backend(storage), { Chi: 'Paid' })).toEqual({
       ok: false,
       error: "Expense #1 can't be read. Fix its row in the sheet first.",
+    });
+  });
+});
+
+describe('handleRequest: editing and deleting', () => {
+  // Bảo paid $10.00 for Anh, Bảo and Chi; Anh has paid back, Chi hasn't.
+  const PIZZA_ROW = [
+    '1',
+    '2026-11-20',
+    'Pizza',
+    '$10.00',
+    'Bảo',
+    '',
+    '',
+    '$3.33 · Paid',
+    '$3.34 · Paid',
+    '$3.33 · Not paid',
+    'Not involved',
+  ];
+  const pizza: NewExpense = {
+    date: '2026-11-20',
+    description: 'Pizza',
+    total: 1000,
+    payer: 'Bảo',
+    note: '',
+    shares: { Anh: 333, Bảo: 334, Chi: 333 },
+  };
+
+  function withPizza() {
+    const storage = fakeStorage(['Anh', 'Bảo', 'Chi', 'Dương']);
+    storage.tabs.Expenses.push([...PIZZA_ROW]);
+    return storage;
+  }
+  const edit = (b: Backend, expense: NewExpense, expenseId = 1) =>
+    handleRequest(
+      body({ passcode: PASSCODE, action: 'editExpense', expenseId, expense }),
+      b,
+    ) as ApiResponse<'editExpense'>;
+  const remove = (b: Backend, expenseId = 1) =>
+    handleRequest(
+      body({ passcode: PASSCODE, action: 'deleteExpense', expenseId }),
+      b,
+    ) as ApiResponse<'deleteExpense'>;
+
+  it('rewrites the row, keeps who had paid back, and logs exactly what changed', () => {
+    const storage = withPizza();
+    const result = edit(backend(storage), {
+      ...pizza,
+      total: 1200,
+      note: 'with drinks',
+      shares: { Anh: 400, Bảo: 400, Chi: 200, Dương: 200 },
+    });
+    expect(storage.tabs.Expenses[1]).toEqual([
+      '1',
+      '2026-11-20',
+      'Pizza',
+      '$12.00',
+      'Bảo',
+      'with drinks',
+      '',
+      '$4.00 · Paid',
+      '$4.00 · Paid',
+      '$2.00 · Not paid',
+      '$2.00 · Not paid',
+    ]);
+    expect(storage.tabs.Activity.slice(1)).toEqual([
+      [
+        '2026-11-21 14:05',
+        'Edited expense',
+        '#1 "Pizza": Total $10.00 → $12.00; Note "" → "with drinks"; ' +
+          'Anh $3.33 · Paid → $4.00 · Paid; Bảo $3.34 · Paid → $4.00 · Paid; ' +
+          'Chi $3.33 · Not paid → $2.00 · Not paid; Dương Not involved → $2.00 · Not paid.',
+      ],
+    ]);
+    expect(result.ok && result.value.expenses[0]?.total).toBe(1200);
+  });
+
+  it('writes and logs nothing when the form is saved unchanged', () => {
+    const storage = withPizza();
+    expect(edit(backend(storage), pizza).ok).toBe(true);
+    expect(storage.tabs.Expenses[1]).toEqual(PIZZA_ROW);
+    expect(storage.tabs.Activity).toHaveLength(1);
+  });
+
+  it('refuses an edit that breaks a rule, writing nothing', () => {
+    const storage = withPizza();
+    expect(edit(backend(storage), { ...pizza, shares: { Anh: 500 } })).toEqual({
+      ok: false,
+      error: 'The shares add up to $5.00, but the total is $10.00.',
+    });
+    expect(storage.tabs.Expenses[1]).toEqual(PIZZA_ROW);
+    expect(storage.tabs.Activity).toHaveLength(1);
+  });
+
+  it('deletes by filling in "Deleted at", keeping the row, and logs every cell', () => {
+    const storage = withPizza();
+    const result = remove(backend(storage));
+    expect(storage.tabs.Expenses[1]).toEqual([
+      ...PIZZA_ROW.slice(0, 6),
+      '2026-11-21 14:05',
+      ...PIZZA_ROW.slice(7),
+    ]);
+    expect(storage.tabs.Activity.slice(1)).toEqual([
+      [
+        '2026-11-21 14:05',
+        'Deleted expense',
+        '#1 "Pizza" (2026-11-20) $10.00, paid by Bảo. ' +
+          'Anh $3.33 · Paid, Bảo $3.34 · Paid, Chi $3.33 · Not paid.',
+      ],
+    ]);
+    expect(result.ok && result.value.expenses[0]?.deletedAt).toBe('2026-11-21 14:05');
+  });
+
+  it('refuses to edit, delete or mark a deleted expense', () => {
+    const storage = withPizza();
+    remove(backend(storage));
+    const refused = { ok: false, error: '"Pizza" was deleted.' };
+    expect(remove(backend(storage))).toEqual(refused);
+    expect(edit(backend(storage), pizza)).toEqual(refused);
+    expect(
+      handleRequest(
+        body({
+          passcode: PASSCODE,
+          action: 'setShareStatuses',
+          expenseId: 1,
+          statuses: { Chi: 'Paid' },
+        }),
+        backend(storage),
+      ),
+    ).toEqual(refused);
+    expect(storage.tabs.Activity).toHaveLength(2);
+  });
+
+  it('refuses an expense that isn’t there', () => {
+    expect(remove(backend(withPizza()), 9)).toEqual({
+      ok: false,
+      error: "Expense #9 isn't in the sheet anymore. Reload the list.",
     });
   });
 });

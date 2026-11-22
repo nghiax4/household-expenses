@@ -108,7 +108,7 @@ describe('settling a month of expenses', () => {
 });
 
 describe('collectUnpaidDebts', () => {
-  it('skips paid shares, the payer, trashed expenses and expenses after #N', () => {
+  it('skips paid shares, the payer, deleted expenses and expenses after #N', () => {
     const expenses = [
       expense(1, 'Bảo', ['$5.00 · Paid', '$5.00 · Paid', '$5.00 · Not paid', NI, NI, NI, NI]),
       expense(2, 'Bảo', ['$9.00 · Not paid', '$9.00 · Paid', NI, NI, NI, NI, NI], '2026-11-02'),

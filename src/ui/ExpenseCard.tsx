@@ -9,9 +9,13 @@ interface Props {
   people: readonly PersonName[];
   today: string;
   onMarkWhoPaid: () => void;
+  onEdit: () => void;
 }
 
-export function ExpenseCard({ expense, people, today, onMarkWhoPaid }: Props) {
+const CARD_BUTTON =
+  'h-9 rounded-full border border-slate-400 px-4 text-sm font-medium active:bg-slate-100';
+
+export function ExpenseCard({ expense, people, today, onMarkWhoPaid, onEdit }: Props) {
   const sharers = people.filter((person) => expense.people[person]?.kind === 'share');
   return (
     <li className="rounded-xl border border-slate-200 p-3">
@@ -37,16 +41,17 @@ export function ExpenseCard({ expense, people, today, onMarkWhoPaid }: Props) {
           );
         })}
       </ul>
-      {/* Only the payer is in the split: nobody owes anything, so there's nothing to mark. */}
-      {sharers.some((person) => person !== expense.payer) && (
-        <button
-          type="button"
-          onClick={onMarkWhoPaid}
-          className="mt-3 h-9 rounded-full border border-slate-400 px-4 text-sm font-medium active:bg-slate-100"
-        >
-          Mark who paid
+      <div className="mt-3 flex gap-2">
+        {/* Only the payer is in the split: nobody owes anything, so there's nothing to mark. */}
+        {sharers.some((person) => person !== expense.payer) && (
+          <button type="button" onClick={onMarkWhoPaid} className={CARD_BUTTON}>
+            Mark who paid
+          </button>
+        )}
+        <button type="button" onClick={onEdit} className={CARD_BUTTON}>
+          Edit
         </button>
-      )}
+      </div>
     </li>
   );
 }

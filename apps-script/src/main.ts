@@ -57,15 +57,9 @@ function sheetStorage(spreadsheetId: string | null): SheetStorage {
     readTab: (name) => tab(name).getDataRange().getDisplayValues(),
     appendRow: (name, cells: readonly SheetCell[]) => {
       const sheet = tab(name);
-      const row = sheet.getRange(sheet.getLastRow() + 1, 1, 1, cells.length);
-      // Formats first, so a date written as text is stored as a date.
-      cells.forEach((cell, i) => {
-        if (cell.numberFormat) {
-          row.getCell(1, i + 1).setNumberFormat(cell.numberFormat);
-        }
-      });
-      row.setValues([cells.map((cell) => cell.value)]);
+      writeRow(sheet, sheet.getLastRow() + 1, cells);
     },
+    setRow: (name, row, cells: readonly SheetCell[]) => writeRow(tab(name), row, cells),
     setCell: (name, row, column, cell: SheetCell) => {
       const range = tab(name).getRange(row, column);
       if (cell.numberFormat) {
@@ -74,6 +68,21 @@ function sheetStorage(spreadsheetId: string | null): SheetStorage {
       range.setValue(cell.value);
     },
   };
+}
+
+function writeRow(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  row: number,
+  cells: readonly SheetCell[],
+): void {
+  const range = sheet.getRange(row, 1, 1, cells.length);
+  // Formats first, so a date written as text is stored as a date.
+  cells.forEach((cell, i) => {
+    if (cell.numberFormat) {
+      range.getCell(1, i + 1).setNumberFormat(cell.numberFormat);
+    }
+  });
+  range.setValues([cells.map((cell) => cell.value)]);
 }
 
 function json(value: unknown): GoogleAppsScript.Content.TextOutput {

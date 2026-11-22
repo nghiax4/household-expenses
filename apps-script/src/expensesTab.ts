@@ -143,11 +143,71 @@ export function addedExpenseActivity(
     const cell = expense.people[person];
     return cell?.kind === 'share' ? [`${person} ${formatDollars(cell.amount)}`] : [];
   });
-  const details =
-    `#${expense.id} "${expense.description}" (${expense.date}) ${formatDollars(expense.total)}, ` +
-    `paid by ${expense.payer}. Split: ${shares.join(', ')}.` +
-    (expense.note === '' ? '' : ` Note: "${expense.note}"`);
+  const details = `${summary(expense)} Split: ${shares.join(', ')}.${noteSuffix(expense)}`;
   return [literal(time), literal('Added expense'), literal(details)];
+}
+
+/**
+ * The Activity entry for a deleted expense, with every person's cell as it was, so the row
+ * could be rebuilt by hand from the log alone.
+ */
+export function deletedExpenseActivity(
+  time: string,
+  expense: Expense,
+  people: readonly PersonName[],
+): SheetCell[] {
+  const cells = people.flatMap((person) => {
+    const cell = expense.people[person];
+    return cell?.kind === 'share' ? [`${person} ${formatPersonCell(cell)}`] : [];
+  });
+  const details = `${summary(expense)} ${cells.join(', ')}.${noteSuffix(expense)}`;
+  return [literal(time), literal('Deleted expense'), literal(details)];
+}
+
+/**
+ * What an edit changed, one item per field or person, e.g. `Total $40.00 → $42.00` or
+ * `Chi $10.00 · Not paid → Not involved`. Empty when nothing changed.
+ */
+export function expenseChanges(
+  before: Expense,
+  after: Expense,
+  people: readonly PersonName[],
+): string[] {
+  const fields: [string, string, string][] = [
+    ['Description', `"${before.description}"`, `"${after.description}"`],
+    ['Date', before.date, after.date],
+    ['Total', formatDollars(before.total), formatDollars(after.total)],
+    ['Payer', before.payer, after.payer],
+    ['Note', `"${before.note}"`, `"${after.note}"`],
+    ...people.map((person): [string, string, string] => [
+      person,
+      formatPersonCell(before.people[person] ?? { kind: 'notInvolved' }),
+      formatPersonCell(after.people[person] ?? { kind: 'notInvolved' }),
+    ]),
+  ];
+  return fields.flatMap(([name, was, now]) => (was === now ? [] : [`${name} ${was} → ${now}`]));
+}
+
+/** The Activity entry for an edit, e.g. `#2 "Internet": Total $40.00 → $42.00; ...`. */
+export function editedExpenseActivity(
+  time: string,
+  before: Expense,
+  changes: readonly string[],
+): SheetCell[] {
+  const details = `#${before.id} "${before.description}": ${changes.join('; ')}.`;
+  return [literal(time), literal('Edited expense'), literal(details)];
+}
+
+/** `#3 "Groceries" (2026-11-21) $10.00, paid by Bảo.` */
+function summary(expense: Expense): string {
+  return (
+    `#${expense.id} "${expense.description}" (${expense.date}) ${formatDollars(expense.total)}, ` +
+    `paid by ${expense.payer}.`
+  );
+}
+
+function noteSuffix(expense: Expense): string {
+  return expense.note === '' ? '' : ` Note: "${expense.note}"`;
 }
 
 /**

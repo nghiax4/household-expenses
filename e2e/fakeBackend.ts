@@ -1,7 +1,12 @@
 import type { Page } from '@playwright/test';
 import { BACKEND_URL } from '../src/api/client';
 import { WRONG_PASSCODE, type ApiRequest, type SheetData } from '../src/api/protocol';
-import { buildExpense, withShareStatuses, type Expense } from '../src/domain/expense';
+import {
+  buildExpense,
+  carryOverStatuses,
+  withShareStatuses,
+  type Expense,
+} from '../src/domain/expense';
 import { fail, ok, type Result } from '../src/domain/result';
 
 // Made-up people (the repo is public), in person-column order.
@@ -46,6 +51,27 @@ export async function fakeBackend(
           data = { ...data, expenses: [...data.expenses, expense.value] };
         }
         await route.fulfill({ json: expense.ok ? ok(data) : expense });
+        return;
+      }
+      case 'editExpense': {
+        const before = data.expenses.find((e) => e.id === request.expenseId);
+        const built = buildExpense(request.expense, request.expenseId, data.people);
+        if (before && built.ok) {
+          const after = carryOverStatuses(before, built.value);
+          data = { ...data, expenses: data.expenses.map((e) => (e.id === after.id ? after : e)) };
+        }
+        await route.fulfill({ json: built.ok ? ok(data) : built });
+        return;
+      }
+      case 'deleteExpense': {
+        const deletedAt = '2026-11-22 12:00';
+        data = {
+          ...data,
+          expenses: data.expenses.map((e) =>
+            e.id === request.expenseId ? { ...e, deletedAt } : e,
+          ),
+        };
+        await route.fulfill({ json: ok(data) });
         return;
       }
       case 'setShareStatuses': {

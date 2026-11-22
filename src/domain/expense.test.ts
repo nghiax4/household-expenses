@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildExpense,
+  carryOverStatuses,
   isCalendarDate,
   liveExpensesNewestFirst,
   recentDescriptions,
@@ -107,7 +108,7 @@ function expense(id: number, date: string, description: string, deletedAt?: stri
 }
 
 describe('liveExpensesNewestFirst', () => {
-  it('sorts by date, then by most recently added, and leaves out the trash', () => {
+  it('sorts by date, then by most recently added, and leaves out deleted ones', () => {
     const expenses = [
       expense(1, '2026-11-02', 'Rent'),
       expense(2, '2026-11-20', 'Pizza'),
@@ -119,7 +120,7 @@ describe('liveExpensesNewestFirst', () => {
 });
 
 describe('recentDescriptions', () => {
-  it('lists each description once, most recently added first, ignoring the trash', () => {
+  it('lists each description once, most recently added first, ignoring deleted ones', () => {
     const expenses = [
       expense(1, '2026-11-01', 'groceries'),
       expense(2, '2026-11-02', 'Rent'),
@@ -169,10 +170,10 @@ describe('withShareStatus', () => {
     ['someone not involved', internet, 'Dương', 'Dương isn\'t part of "Internet".'],
     ['someone not in the household', internet, 'Zed', 'Zed isn\'t part of "Internet".'],
     [
-      'an expense in the trash',
+      'a deleted expense',
       { ...internet, deletedAt: '2026-11-21 10:00' },
       'Bảo',
-      '"Internet" is in the trash.',
+      '"Internet" was deleted.',
     ],
   ])('refuses %s', (_, expense, person, error) => {
     expect(withShareStatus(expense, person, 'Paid')).toEqual({ ok: false, error });
@@ -214,5 +215,53 @@ describe('withShareStatuses', () => {
 
   it('changes nothing for an empty list', () => {
     expect(withShareStatuses(lunch, {})).toEqual({ ok: true, value: lunch });
+  });
+});
+
+describe('carryOverStatuses', () => {
+  const share = (amount: number, status: 'Paid' | 'Not paid') =>
+    ({ kind: 'share', amount, status }) as const;
+  const before: Expense = {
+    id: 4,
+    date: '2026-11-20',
+    description: 'Groceries',
+    total: 3000,
+    payer: 'Anh',
+    note: '',
+    deletedAt: null,
+    people: {
+      Anh: share(1000, 'Paid'),
+      Bảo: share(1000, 'Paid'),
+      Chi: share(1000, 'Not paid'),
+      Dương: { kind: 'notInvolved' },
+    },
+  };
+
+  it('keeps who had paid back, even with new amounts; newcomers start Not paid', () => {
+    const edited = buildExpense(
+      { ...before, total: 4000, shares: { Anh: 1000, Bảo: 1500, Chi: 1000, Dương: 500 } },
+      4,
+      PEOPLE,
+    );
+    expect(edited.ok && carryOverStatuses(before, edited.value).people).toEqual({
+      Anh: share(1000, 'Paid'),
+      Bảo: share(1500, 'Paid'),
+      Chi: share(1000, 'Not paid'),
+      Dương: share(500, 'Not paid'),
+    });
+  });
+
+  it('marks a new payer Paid, and an old payer who stays in the split Not paid', () => {
+    const edited = buildExpense(
+      { ...before, payer: 'Chi', shares: { Anh: 1000, Bảo: 1000, Chi: 1000 } },
+      4,
+      PEOPLE,
+    );
+    expect(edited.ok && carryOverStatuses(before, edited.value).people).toEqual({
+      Anh: share(1000, 'Not paid'),
+      Bảo: share(1000, 'Paid'),
+      Chi: share(1000, 'Paid'),
+      Dương: { kind: 'notInvolved' },
+    });
   });
 });

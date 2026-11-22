@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
-import { AddExpenseForm } from './AddExpenseForm';
 import { localDate } from './dates';
 import { ExpenseCard } from './ExpenseCard';
+import { ExpenseForm } from './ExpenseForm';
 import { Waiting } from './Waiting';
 import { WhoPaidDialog } from './WhoPaidDialog';
 
@@ -20,7 +20,8 @@ type Loading =
 export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
-  const [adding, setAdding] = useState(false);
+  // The form, when it's open: for a new expense, or for editing one.
+  const [form, setForm] = useState<{ editing?: Expense } | null>(null);
   // The expense whose "Mark who paid" checklist is open.
   const [marking, setMarking] = useState<Expense | null>(null);
 
@@ -71,16 +72,17 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
   }
 
   const { data } = loading;
-  if (adding) {
+  if (form) {
     return (
-      <AddExpenseForm
+      <ExpenseForm
         data={data}
+        editing={form.editing}
         passcode={passcode}
         onSaved={(saved) => {
           setLoading({ state: 'ready', data: saved });
-          setAdding(false);
+          setForm(null);
         }}
-        onCancel={() => setAdding(false)}
+        onCancel={() => setForm(null)}
         onPasscodeRejected={onPasscodeRejected}
       />
     );
@@ -105,7 +107,7 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
       )}
       <button
         type="button"
-        onClick={() => setAdding(true)}
+        onClick={() => setForm({})}
         className="h-12 rounded-lg bg-slate-900 font-medium text-white"
       >
         Add expense
@@ -121,6 +123,7 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
               people={data.people}
               today={today}
               onMarkWhoPaid={() => setMarking(expense)}
+              onEdit={() => setForm({ editing: expense })}
             />
           ))}
         </ul>

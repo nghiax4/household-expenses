@@ -1,10 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
-import { buildExpense, recentDescriptions, type NewExpense } from '../domain/expense';
+import { buildExpense, recentDescriptions, type Expense, type NewExpense } from '../domain/expense';
 import { formatTypedAmount, parseTypedAmount, type PersonName } from '../domain/money';
 import { fail, ok, type Result } from '../domain/result';
-import { sharesFromTyped, type TypedSplit } from '../domain/split';
+import { isEqualSplit, sharesFromTyped, type TypedSplit } from '../domain/split';
 import type { Template } from '../domain/template';
 import { localDate } from './dates';
 import { Choice } from './Choice';
@@ -13,6 +13,8 @@ import { Waiting } from './Waiting';
 
 interface Props {
   data: SheetData;
+  /** The expense to edit. Without it, the form adds a new one. */
+  editing?: Expense;
   passcode: string;
   onSaved: (data: SheetData) => void;
   onCancel: () => void;
@@ -21,18 +23,30 @@ interface Props {
 
 const RECENT_DESCRIPTION_COUNT = 6;
 const TEXT_BOX = 'h-12 w-full rounded-lg border border-slate-300 px-3 text-base';
+const EQUAL_SPLIT: TypedSplit = { mode: 'equal', amounts: {}, percents: {} };
 
-export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRejected }: Props) {
+/** Adds an expense, or edits (and deletes) one. */
+export function ExpenseForm({
+  data,
+  editing,
+  passcode,
+  onSaved,
+  onCancel,
+  onPasscodeRejected,
+}: Props) {
   const { people } = data;
-  const [description, setDescription] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [date, setDate] = useState(() => localDate(0));
-  const [payer, setPayer] = useState<PersonName | null>(null);
-  const [participants, setParticipants] = useState<ReadonlySet<PersonName>>(new Set());
-  const [typed, setTyped] = useState<TypedSplit>({ mode: 'equal', amounts: {}, percents: {} });
-  const [note, setNote] = useState('');
+  const [initial] = useState(() => initialValues(editing, people));
+  const [description, setDescription] = useState(initial.description);
+  const [amountText, setAmountText] = useState(initial.amountText);
+  const [date, setDate] = useState(initial.date);
+  const [payer, setPayer] = useState(initial.payer);
+  const [participants, setParticipants] = useState(initial.participants);
+  const [typed, setTyped] = useState(initial.typed);
+  const [note, setNote] = useState(initial.note);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  // Which request is running, so only its button shows the spinner.
+  const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // The list may have been scrolled far down; the form starts at its top.
   useEffect(() => {
@@ -59,7 +73,7 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
     setDescription(template.name);
     setPayer(template.payer);
     setParticipants(new Set(template.participants));
-    setTyped({ mode: 'equal', amounts: {}, percents: {} });
+    setTyped(EQUAL_SPLIT);
     setAmountText(template.defaultAmount === null ? '' : formatTypedAmount(template.defaultAmount));
     setError(null);
   }
@@ -99,9 +113,27 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
       return;
     }
     setError(null);
-    setSaving(true);
-    const result = await callBackend({ passcode, action: 'addExpense', expense: expense.value });
-    setSaving(false);
+    setBusy('saving');
+    finish(
+      editing
+        ? await callBackend({
+            passcode,
+            action: 'editExpense',
+            expenseId: editing.id,
+            expense: expense.value,
+          })
+        : await callBackend({ passcode, action: 'addExpense', expense: expense.value }),
+    );
+  }
+
+  async function handleDelete(expense: Expense) {
+    setError(null);
+    setBusy('deleting');
+    finish(await callBackend({ passcode, action: 'deleteExpense', expenseId: expense.id }));
+  }
+
+  function finish(result: Result<SheetData>) {
+    setBusy(null);
     if (result.ok) {
       onSaved(result.value);
     } else if (result.error === WRONG_PASSCODE) {
@@ -113,9 +145,10 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-5">
-      <h2 className="text-xl font-semibold">Add expense</h2>
+      <h2 className="text-xl font-semibold">{editing ? 'Edit expense' : 'Add expense'}</h2>
 
-      {data.templates.length > 0 && (
+      {/* Quick fill would overwrite an expense being edited, so it's for new ones only. */}
+      {!editing && data.templates.length > 0 && (
         <div className="flex flex-col gap-2">
           <p id="quick-fill" className="font-medium">
             Quick fill
@@ -135,7 +168,7 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
         </div>
       )}
       {/* Templates are typed by hand in the sheet, so say which rows were skipped and why. */}
-      {data.templateProblems.length > 0 && (
+      {!editing && data.templateProblems.length > 0 && (
         <div role="status" className="rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
           <p className="font-medium">
             Some templates in the sheet can’t be read, so they’re left out. Fix them in the
@@ -264,19 +297,109 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
         <button
           type="button"
           onClick={onCancel}
-          disabled={saving}
+          disabled={busy !== null}
           className="h-12 flex-1 rounded-lg border border-slate-300 font-medium disabled:opacity-50"
         >
           Cancel
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={busy !== null}
           className="h-12 flex-1 rounded-lg bg-slate-900 font-medium text-white disabled:opacity-50"
         >
-          {saving ? <Waiting label="Saving" /> : 'Save'}
+          {busy === 'saving' ? <Waiting label="Saving" /> : 'Save'}
         </button>
       </div>
+
+      {editing &&
+        (confirmingDelete ? (
+          <div
+            role="group"
+            aria-label="Delete this expense?"
+            className="flex flex-col gap-3 rounded-lg border border-red-200 p-3"
+          >
+            <p>
+              Delete “{editing.description}”? It disappears from the app for everyone, and the app
+              can’t bring it back.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={busy !== null}
+                className="h-12 flex-1 rounded-lg border border-slate-300 font-medium disabled:opacity-50"
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(editing)}
+                disabled={busy !== null}
+                className="h-12 flex-1 rounded-lg bg-red-700 font-medium text-white disabled:opacity-50"
+              >
+                {busy === 'deleting' ? <Waiting label="Deleting" /> : 'Delete'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            disabled={busy !== null}
+            className="h-12 rounded-lg font-medium text-red-700 disabled:opacity-50"
+          >
+            Delete expense
+          </button>
+        ))}
     </form>
   );
+}
+
+interface FormValues {
+  description: string;
+  amountText: string;
+  date: string;
+  payer: PersonName | null;
+  participants: ReadonlySet<PersonName>;
+  typed: TypedSplit;
+  note: string;
+}
+
+/**
+ * What the form starts with: empty for a new expense (nothing pre-picked, so a wrong default
+ * can't slip through), or the expense as stored. Its split shows as "equal" when the amounts
+ * are exactly an equal split, otherwise as typed amounts (the split type isn't stored).
+ */
+function initialValues(editing: Expense | undefined, people: readonly PersonName[]): FormValues {
+  if (!editing) {
+    return {
+      description: '',
+      amountText: '',
+      date: localDate(0),
+      payer: null,
+      participants: new Set(),
+      typed: EQUAL_SPLIT,
+      note: '',
+    };
+  }
+  const shares = new Map(
+    people.flatMap((person): [PersonName, number][] => {
+      const cell = editing.people[person];
+      return cell?.kind === 'share' ? [[person, cell.amount]] : [];
+    }),
+  );
+  const amounts = Object.fromEntries(
+    [...shares].map(([person, cents]) => [person, formatTypedAmount(cents)]),
+  );
+  return {
+    description: editing.description,
+    amountText: formatTypedAmount(editing.total),
+    date: editing.date,
+    payer: editing.payer,
+    participants: new Set(shares.keys()),
+    typed: isEqualSplit(editing.total, shares, editing.payer)
+      ? EQUAL_SPLIT
+      : { mode: 'amounts', amounts, percents: {} },
+    note: editing.note,
+  };
 }

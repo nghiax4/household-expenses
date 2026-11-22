@@ -49,7 +49,7 @@ const START = {
     {
       id: 3,
       date: localDate(0),
-      description: 'In the trash',
+      description: 'Deleted',
       total: 100,
       payer: 'Anh',
       note: '',
@@ -115,7 +115,7 @@ test('adds an equal split, checking the form before saving', async ({ page }) =>
   await save.click();
   await expect(alert).toHaveText('Add a description.');
 
-  // A recent description fills the box with one tap; the trash isn't offered.
+  // A recent description fills the box with one tap; deleted ones aren't offered.
   const recent = page.getByRole('group', { name: 'Recent descriptions' }).getByRole('button');
   await expect(recent).toHaveText(['Internet', 'Groceries']);
   await recent.filter({ hasText: 'Groceries' }).click();
@@ -434,4 +434,94 @@ test('quick fill from a template, then save', async ({ page }) => {
     payer: 'Bảo',
     shares: { Anh: 1375, Bảo: 1375, Chi: 1375, Dương: 1375 },
   });
+});
+
+test('edits an expense, keeping who had already paid back', async ({ page }) => {
+  const requests = await fakeBackend(page, START);
+  await page.goto('/');
+  const card = (name: string) =>
+    page
+      .getByRole('list', { name: 'Expenses' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('heading', { name }) });
+  await card('Internet').getByRole('button', { name: 'Edit' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Edit expense' })).toBeVisible();
+  // Quick fill would overwrite the expense, so it's only offered for new ones.
+  await expect(page.getByRole('group', { name: 'Quick fill' })).toHaveCount(0);
+  await expect(page.getByLabel('Description', { exact: true })).toHaveValue('Internet');
+  await expect(page.getByLabel('Note')).toHaveValue('November');
+  await expect(
+    page.getByRole('group', { name: 'How to split' }).getByRole('button', { name: 'Equally' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const total = page.getByLabel('Total');
+  await expect(total).toHaveValue('40.00');
+  await total.fill('48');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Edit expense' })).toHaveCount(0);
+  await expect(
+    card('Internet').getByRole('list', { name: 'Shares' }).getByRole('listitem'),
+  ).toHaveText([
+    '✓ Anh $12.00, paid',
+    '✓ Bảo $12.00, paid',
+    'Chi $12.00, not paid',
+    'Dương $12.00, not paid',
+  ]);
+  expect(requests.at(-1)).toMatchObject({
+    action: 'editExpense',
+    expenseId: 2,
+    expense: { total: 4800, shares: { Anh: 1200, Bảo: 1200, Chi: 1200, Dương: 1200 } },
+  });
+});
+
+test('an uneven split reopens as typed amounts', async ({ page }) => {
+  await fakeBackend(page, START);
+  await page.goto('/');
+  const edit = () =>
+    page
+      .getByRole('list', { name: 'Expenses' })
+      .getByRole('listitem')
+      .filter({ has: page.getByRole('heading', { name: 'Groceries' }) })
+      .getByRole('button', { name: 'Edit' })
+      .click();
+  await edit();
+  await page
+    .getByRole('group', { name: 'How to split' })
+    .getByRole('button', { name: 'Amounts' })
+    .click();
+  await page.getByLabel("Anh's amount").fill('20');
+  await page.getByLabel("Bảo's amount").fill('10');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await edit();
+  await expect(
+    page.getByRole('group', { name: 'How to split' }).getByRole('button', { name: 'Amounts' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel("Anh's amount")).toHaveValue('20.00');
+  await expect(page.getByLabel("Bảo's amount")).toHaveValue('10.00');
+});
+
+test('deletes an expense, asking first', async ({ page }) => {
+  const requests = await fakeBackend(page, START);
+  await page.goto('/');
+  const headings = page.getByRole('list', { name: 'Expenses' }).getByRole('heading');
+  await page
+    .getByRole('list', { name: 'Expenses' })
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('heading', { name: 'Groceries' }) })
+    .getByRole('button', { name: 'Edit' })
+    .click();
+
+  const confirm = page.getByRole('group', { name: 'Delete this expense?' });
+  await page.getByRole('button', { name: 'Delete expense' }).click();
+  await expect(confirm).toContainText('Delete “Groceries”?');
+  await confirm.getByRole('button', { name: 'Keep it' }).click();
+  await expect(confirm).toHaveCount(0);
+  expect(requests.map((r) => r.action)).not.toContain('deleteExpense');
+
+  await page.getByRole('button', { name: 'Delete expense' }).click();
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+  await expect(headings).toHaveText(['Internet']);
+  expect(requests.at(-1)).toMatchObject({ action: 'deleteExpense', expenseId: 1 });
 });

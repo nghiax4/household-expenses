@@ -11,6 +11,9 @@ export type ApiRequest = { passcode: string } & (
   | { action: 'checkPasscode' }
   | { action: 'listExpenses' }
   | { action: 'addExpense'; expense: NewExpense }
+  // The whole expense as the form now has it; who had already paid back is kept.
+  | { action: 'editExpense'; expenseId: number; expense: NewExpense }
+  | { action: 'deleteExpense'; expenseId: number }
   // The new statuses rather than "toggle", so a phone showing an old list can't flip one back.
   | {
       action: 'setShareStatuses';
@@ -25,7 +28,7 @@ export type ApiAction = ApiRequest['action'];
 export interface SheetData {
   /** Everyone with a column in Expenses, in column order. */
   people: PersonName[];
-  /** Every readable row, including the ones in the trash. */
+  /** Every readable row, including deleted ones (which the app hides). */
   expenses: Expense[];
   /**
    * Expenses rows that couldn't be read, explained for whoever fixes them in the sheet. They're
@@ -46,6 +49,8 @@ export interface ApiResults {
   addExpense: SheetData;
   /** Read back the same way. */
   setShareStatuses: SheetData;
+  editExpense: SheetData;
+  deleteExpense: SheetData;
 }
 
 export type ApiResponse<A extends ApiAction> = Result<ApiResults[A]>;

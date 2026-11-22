@@ -13,7 +13,7 @@ export interface Expense {
   total: Cents;
   payer: PersonName;
   note: string;
-  /** When it was moved to the trash, or null if it's live. */
+  /** When it was deleted, or null if it's live. Deleted rows stay in the sheet, hidden. */
   deletedAt: string | null;
   /**
    * Every person's cell. A plain object so it travels as JSON; for person-column order,
@@ -114,7 +114,7 @@ export function withShareStatus(
   status: ShareStatus,
 ): Result<Expense> {
   if (expense.deletedAt !== null) {
-    return fail(`"${expense.description}" is in the trash.`);
+    return fail(`"${expense.description}" was deleted.`);
   }
   const cell = expense.people[person];
   if (cell?.kind !== 'share') {
@@ -142,7 +142,26 @@ export function withShareStatuses(
   return ok(result);
 }
 
-/** Live expenses (not in the trash), latest date first; same-day expenses newest-added first. */
+/**
+ * After an edit, keeps who had already paid back: each person who was sharing (and wasn't the
+ * payer) keeps their Paid or Not paid; anyone new starts Not paid; the payer is always Paid. So a
+ * payer who stops being the payer but stays in the split now owes their share.
+ */
+export function carryOverStatuses(before: Expense, after: Expense): Expense {
+  const people = Object.fromEntries(
+    Object.entries(after.people).map(([person, cell]): [PersonName, PersonCell] => {
+      if (cell.kind !== 'share' || person === after.payer) {
+        return [person, cell];
+      }
+      const old = before.people[person];
+      const status = old?.kind === 'share' && person !== before.payer ? old.status : 'Not paid';
+      return [person, { ...cell, status }];
+    }),
+  );
+  return { ...after, people };
+}
+
+/** Live expenses (deleted ones left out), latest date first; same-day expenses newest-added first. */
 export function liveExpensesNewestFirst(expenses: readonly Expense[]): Expense[] {
   return expenses
     .filter((expense) => expense.deletedAt === null)

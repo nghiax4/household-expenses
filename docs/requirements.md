@@ -37,7 +37,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Dropped from sheet2: the "Zelle vào" column (unused) and "Extra people" (replaced by adding people).
 
 ### Expense list and Add form (built 2026-11-21)
-- **List:** live expenses (trash hidden), latest date first; same-day expenses newest-added first. Each card shows description, total, date, payer, the note if any, and a chip per participant: red "Name $x" while Not paid, green "✓ Name $x" once Paid. Not-involved people get no chip.
+- **List:** live expenses (deleted ones hidden), latest date first; same-day expenses newest-added first. Each card shows description, total, date, payer, the note if any, and a chip per participant: red "Name $x" while Not paid, green "✓ Name $x" once Paid. Not-involved people get no chip.
 - **Rows the backend can't read** (bad hand edits) are left out of the list, and a yellow box at the top names each one by sheet row number with what's wrong, so it can be fixed in the sheet.
 - **Add form**: Description (with up to 6 recent-description chips), Total, Date (Today / Yesterday / date picker, default today), Paid by (pick one), Split (how, and between whom), Note. **Nothing is pre-selected** for payer or participants, so a wrong default can't slip through unnoticed. Once the total, payer and people are set, the form previews each person's share with the same chips as the list.
 - The payer **doesn't have to be in the split** (e.g., buying something only for others; they're owed the full total). It's easy to do by a missed tap, so the form then says so under the preview: "Anh isn't in the split, so Anh is owed the full $1.01." (Confirmed with the user 2026-11-22.)
@@ -45,12 +45,18 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Problems are explained one at a time on Save, in form order; the backend re-checks everything. While saving, the buttons are disabled so a double tap can't add the expense twice.
 - If a saved passcode stops working (it was changed), the app forgets it and asks again.
 
+### Editing and deleting (built 2026-11-22)
+- Each card has an **Edit** button next to "Mark who paid". It opens the same form as Add, filled in with the expense as stored and titled "Edit expense". The split opens as "Equally" when the amounts are exactly an equal split, otherwise as typed Amounts. Quick fill isn't shown (it would overwrite the expense).
+- **Who had paid back is kept** through an edit: each person still sharing (who wasn't the payer) keeps Paid or Not paid, even if their amount changed; people added start Not paid; the payer is always Paid, so an old payer who stays in the split now owes their share. The Activity entry lists exactly what changed, e.g. `#2 "Internet": Total $40.00 → $48.00; Chi $10.00 · Not paid → $12.00 · Not paid.` Saving unchanged writes and logs nothing.
+- **Delete expense** at the bottom of the edit form asks first ("Delete "Groceries"? It disappears from the app for everyone, and the app can't bring it back." Keep it / Delete). See Safety for what a delete does in the sheet.
+- The backend refuses to edit, delete or mark a deleted expense, and checks the same rules as Add.
+
 ### Marking shares paid (built 2026-11-22)
 - The chips on a card are plain (not tappable). Below them, a **Mark who paid** button opens a checklist: "Who has paid back for "Internet"?". Each participant has a row with a checkbox, their chip (red/green, following the tick) and "Paid back" / "Not paid". The payer's row has no checkbox and says **"Paid the bill"**: their share counts as settled because they fronted the whole bill. The button is hidden when the payer is the only one in the split.
 - Nothing is saved until **Save** (Cancel discards), so a stray tick can be undone. Several people can be marked in one Save. Unticking a green row sets it back to Not paid.
 - Screen words vs storage: "Paid back" and "Paid the bill" are only on screen; the sheet keeps "Paid" / "Not paid".
 - The app sends only the shares that changed, each with its **new status** (not "toggle"), so a phone showing an old list can't flip a share back or overwrite another phone's change to someone else. Shares already at that status are neither written nor logged.
-- The backend checks every change before writing any, and refuses the whole Save for the payer's share, someone not involved, an expense in the trash, an ID it can't find, an ID on two rows, or a row it can't read. Otherwise it rewrites each changed person cell, adds one Activity row per person (`Marked paid` / `Marked not paid`, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.`), and returns the tab read back.
+- The backend checks every change before writing any, and refuses the whole Save for the payer's share, someone not involved, a deleted expense, an ID it can't find, an ID on two rows, or a row it can't read. Otherwise it rewrites each changed person cell, adds one Activity row per person (`Marked paid` / `Marked not paid`, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.`), and returns the tab read back.
 - Still to come with settlements: refuse shares locked by a pending settlement ("covered by settlement #K").
 
 ## Quick-add templates (recurring bills) (built 2026-11-22)
@@ -88,7 +94,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 
 ## Safety
 - **Activity log** of every create, edit, delete, status change and settlement action on expenses, templates and people. Ideas are the exception (see "Ideas").
-- **Trash with restore** for deleted expenses (soft delete).
+- **Delete without a trash screen** (decided 2026-11-22: "we'll never need it"). A delete only fills in the row's "Deleted at" cell; the row stays in the sheet, hidden from the app. Expense IDs are never reused (settlements rely on that), and a mistaken delete can be undone by hand by clearing that cell (Claude, when asked). The Activity entry lists every cell, so the row could even be rebuilt from the log.
 
 ## Data migration
 - **Import all sheet2 rows** at launch, read from the live sheet at that time (the user corrects data in the sheet, e.g., rows 22, 23 and 25 on 2026-11-16).
@@ -112,7 +118,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ### Storage schema: "layout 1", sheet2-style, 5 tabs (approved by the user 2026-11-17; Ideas tab added 2026-11-19)
 | Tab | Columns | Notes |
 |---|---|---|
-| **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it's in the trash. The history of changes to an expense lives only in Activity. |
+| **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it was deleted (hidden from the app; see Safety). The history of changes to an expense lives only in Activity. |
 | **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at | One row per transfer line. A settlement is closed when all its lines are Paid (derived, not stored). |
 | **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Edited by hand (by Claude); the app only reads it. See "Quick-add templates". |
 | **Activity** | Time, Action, Details | Append-only. |
