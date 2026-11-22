@@ -1,19 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { callBackend } from '../api/client';
-import { WRONG_PASSCODE, type ExpensesData } from '../api/protocol';
+import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import { buildExpense, recentDescriptions, type NewExpense } from '../domain/expense';
-import { parseTypedAmount, type PersonName } from '../domain/money';
+import { formatTypedAmount, parseTypedAmount, type PersonName } from '../domain/money';
 import { fail, ok, type Result } from '../domain/result';
 import { sharesFromTyped, type TypedSplit } from '../domain/split';
+import type { Template } from '../domain/template';
 import { localDate } from './dates';
 import { Choice } from './Choice';
 import { SplitPicker } from './SplitPicker';
 import { Waiting } from './Waiting';
 
 interface Props {
-  data: ExpensesData;
+  data: SheetData;
   passcode: string;
-  onSaved: (data: ExpensesData) => void;
+  onSaved: (data: SheetData) => void;
   onCancel: () => void;
   onPasscodeRejected: () => void;
 }
@@ -51,6 +52,16 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
       next.add(person);
     }
     setParticipants(next);
+  }
+
+  /** Fills the form from a template. Everything stays editable before saving. */
+  function fillFrom(template: Template) {
+    setDescription(template.name);
+    setPayer(template.payer);
+    setParticipants(new Set(template.participants));
+    setTyped({ mode: 'equal', amounts: {}, percents: {} });
+    setAmountText(template.defaultAmount === null ? '' : formatTypedAmount(template.defaultAmount));
+    setError(null);
   }
 
   function prepare(): Result<NewExpense> {
@@ -103,6 +114,40 @@ export function AddExpenseForm({ data, passcode, onSaved, onCancel, onPasscodeRe
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-5">
       <h2 className="text-xl font-semibold">Add expense</h2>
+
+      {data.templates.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p id="quick-fill" className="font-medium">
+            Quick fill
+          </p>
+          <div role="group" aria-labelledby="quick-fill" className="flex flex-wrap gap-2">
+            {data.templates.map((template) => (
+              <button
+                key={template.name}
+                type="button"
+                onClick={() => fillFrom(template)}
+                className="h-10 rounded-full bg-slate-100 px-4 active:bg-slate-300"
+              >
+                {template.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Templates are typed by hand in the sheet, so say which rows were skipped and why. */}
+      {data.templateProblems.length > 0 && (
+        <div role="status" className="rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
+          <p className="font-medium">
+            Some templates in the sheet can’t be read, so they’re left out. Fix them in the
+            Templates tab:
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {data.templateProblems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label htmlFor="description" className="font-medium">

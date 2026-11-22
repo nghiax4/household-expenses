@@ -1,6 +1,6 @@
 // Reading and writing rows of the Expenses tab. Pure: it works on cells as the sheet displays
 // them, so the rules are unit-tested without Google services.
-import type { ExpensesData } from '../../src/api/protocol';
+import type { SheetData } from '../../src/api/protocol';
 import { isCalendarDate, type Expense } from '../../src/domain/expense';
 import {
   formatDollars,
@@ -26,8 +26,11 @@ export interface SheetCell {
 
 const FIXED_HEADERS: readonly string[] = TAB_HEADERS.Expenses;
 
+/** What the Expenses tab alone gives: everything in SheetData except the templates. */
+export type ExpensesTab = Omit<SheetData, 'templates' | 'templateProblems'>;
+
 /** Reads the Expenses tab from its displayed cells, header row first. */
-export function readExpensesTab(rows: readonly (readonly string[])[]): Result<ExpensesData> {
+export function readExpensesTab(rows: readonly (readonly string[])[]): Result<ExpensesTab> {
   const [header = [], ...dataRows] = rows;
   const people = readPeople(header);
   if (!people.ok) {

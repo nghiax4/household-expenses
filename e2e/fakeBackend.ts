@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { BACKEND_URL } from '../src/api/client';
-import { WRONG_PASSCODE, type ApiRequest, type ExpensesData } from '../src/api/protocol';
+import { WRONG_PASSCODE, type ApiRequest, type SheetData } from '../src/api/protocol';
 import { buildExpense, withShareStatuses, type Expense } from '../src/domain/expense';
 import { fail, ok, type Result } from '../src/domain/result';
 
@@ -15,7 +15,13 @@ export const PASSCODE = '2468';
  */
 export async function fakeBackend(
   page: Page,
-  start: ExpensesData = { people: PEOPLE, expenses: [], problems: [] },
+  start: SheetData = {
+    people: PEOPLE,
+    expenses: [],
+    problems: [],
+    templates: [],
+    templateProblems: [],
+  },
 ): Promise<ApiRequest[]> {
   let data = start;
   const requests: ApiRequest[] = [];

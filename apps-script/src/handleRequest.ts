@@ -1,4 +1,4 @@
-import { WRONG_PASSCODE, type ApiRequest, type ExpensesData } from '../../src/api/protocol';
+import { WRONG_PASSCODE, type ApiRequest, type SheetData } from '../../src/api/protocol';
 import { buildExpense, withShareStatuses, type NewExpense } from '../../src/domain/expense';
 import type { ShareStatus } from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
@@ -13,6 +13,7 @@ import {
   shareStatusActivity,
   type SheetCell,
 } from './expensesTab';
+import { readTemplatesTab } from './templatesTab';
 import type { TabName } from './schema';
 
 /** The storage spreadsheet, as the request handler sees it. */
@@ -52,7 +53,7 @@ export function handleRequest(rawBody: string, backend: Backend): Result<unknown
     case 'checkPasscode':
       return ok({});
     case 'listExpenses':
-      return readExpensesTab(backend.storage.readTab('Expenses'));
+      return readSheet(backend.storage);
     case 'addExpense':
       return addExpense(request.expense, backend);
     case 'setShareStatuses':
@@ -60,7 +61,7 @@ export function handleRequest(rawBody: string, backend: Backend): Result<unknown
   }
 }
 
-function addExpense(input: NewExpense, { storage, now }: Backend): Result<ExpensesData> {
+function addExpense(input: NewExpense, { storage, now }: Backend): Result<SheetData> {
   const rows = storage.readTab('Expenses');
   const current = readExpensesTab(rows);
   if (!current.ok) {
@@ -74,14 +75,13 @@ function addExpense(input: NewExpense, { storage, now }: Backend): Result<Expens
 
   storage.appendRow('Expenses', expenseRow(expense.value, people));
   storage.appendRow('Activity', addedExpenseActivity(now(), expense.value, people));
-  // Read back rather than trusting what was written, so the app shows exactly what's stored.
-  return readExpensesTab(storage.readTab('Expenses'));
+  return readSheet(storage);
 }
 
 function setShareStatuses(
   { expenseId, statuses }: ShareStatusesRequest,
   { storage, now }: Backend,
-): Result<ExpensesData> {
+): Result<SheetData> {
   const rows = storage.readTab('Expenses');
   const current = readExpensesTab(rows);
   if (!current.ok) {
@@ -119,7 +119,23 @@ function setShareStatuses(
       );
     }
   }
-  return readExpensesTab(storage.readTab('Expenses'));
+  return readSheet(storage);
+}
+
+/**
+ * Everything the app shows, read fresh. Writes end with this too, so the app shows exactly
+ * what's stored rather than what it asked for.
+ */
+function readSheet(storage: SheetStorage): Result<SheetData> {
+  const expenses = readExpensesTab(storage.readTab('Expenses'));
+  if (!expenses.ok) {
+    return expenses;
+  }
+  const { templates, problems } = readTemplatesTab(
+    storage.readTab('Templates'),
+    expenses.value.people,
+  );
+  return ok({ ...expenses.value, templates, templateProblems: problems });
 }
 
 type ShareStatusesRequest = Extract<ApiRequest, { action: 'setShareStatuses' }>;

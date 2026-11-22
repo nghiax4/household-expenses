@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { callBackend } from '../api/client';
-import { WRONG_PASSCODE, type ExpensesData } from '../api/protocol';
+import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
 import { AddExpenseForm } from './AddExpenseForm';
 import { localDate } from './dates';
@@ -15,9 +15,7 @@ interface Props {
 }
 
 type Loading =
-  | { state: 'loading' }
-  | { state: 'failed'; error: string }
-  | { state: 'ready'; data: ExpensesData };
+  { state: 'loading' } | { state: 'failed'; error: string } | { state: 'ready'; data: SheetData };
 
 export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' });

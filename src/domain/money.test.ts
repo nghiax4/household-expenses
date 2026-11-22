@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDollars, parseDollars, parseTypedAmount } from './money';
+import { formatDollars, formatTypedAmount, parseDollars, parseTypedAmount } from './money';
 
 describe('parseTypedAmount', () => {
   it.each([
@@ -84,5 +84,16 @@ describe('parseDollars', () => {
     for (const cents of [0, 1, 99, 100, 101, 99999, 100000, 234567, 123456789]) {
       expect(parseDollars(formatDollars(cents))).toBe(cents);
     }
+  });
+});
+
+describe('formatTypedAmount', () => {
+  it.each([
+    [4000, '40.00'],
+    [5, '0.05'],
+    [123450, '1,234.50'],
+  ])('formats %i as %j, which parseTypedAmount reads back', (cents, text) => {
+    expect(formatTypedAmount(cents)).toBe(text);
+    expect(parseTypedAmount(text)).toEqual({ ok: true, value: cents });
   });
 });

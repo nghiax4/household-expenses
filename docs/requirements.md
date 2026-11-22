@@ -53,11 +53,12 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - The backend checks every change before writing any, and refuses the whole Save for the payer's share, someone not involved, an expense in the trash, an ID it can't find, an ID on two rows, or a row it can't read. Otherwise it rewrites each changed person cell, adds one Activity row per person (`Marked paid` / `Marked not paid`, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.`), and returns the tab read back.
 - Still to come with settlements: refuse shares locked by a pending settlement ("covered by settlement #K").
 
-## Quick-add templates (recurring bills)
-- Saved presets: name, payer, participants, plus an optional default amount. **Templates always split equally** (MVP). The user can switch to a custom or percentage split on the pre-filled form before saving.
-- Templates are created and edited in the app. They don't affect balances.
-- Examples: rent, Internet, electricity, insurance, each split among the 4 roommates (payers and amounts in private notes).
-- Using a template pre-fills everything, so the user only confirms or types the amount and date.
+## Quick-add templates (recurring bills) (built 2026-11-22)
+- Presets: name, payer, participants, plus an optional default amount. **Templates always split equally.** They don't affect balances.
+- **Edited only in the sheet's Templates tab** (decided 2026-11-22, the user's idea): templates change maybe once a year, so a screen for them isn't worth it. Claude makes the edits (in Chrome, at the user's request), so mistakes get caught. The app only reads them. Columns: Name, Payer, Participants (names separated by commas), Default amount (optional; typed like 25 or 12.50). Stray spaces are forgiven; names must match a person column exactly.
+- A row the app can't read (unknown name, bad amount, a name used twice) is skipped and explained in a yellow box on the Add form, like broken expense rows. A changed header skips all templates. The rest of the app keeps working either way.
+- **Using one:** a **Quick fill** row of buttons at the top of the Add form. Tapping one fills the description (the template's name), payer, people (equal split) and the default amount; with no default (rent, electricity) the Total box is left empty. The keypad doesn't open on its own (it did at first; the user found it annoying). Everything stays editable, including switching to Amounts or Percent, before Save.
+- Starting set (added 2026-11-22, English names): Rent, Internet, Electricity, Insurance, all for the 4 roommates (payers and amounts in private notes; rent has no default).
 
 ## Ideas (notes on undecided changes to the app)
 - A simple inbox for ideas about the app itself, e.g., "need a way to split tips" or "not sure templates are still useful". The point is to write a thought down on the phone right away, then discuss it later with Claude Code on the laptop and change the app.
@@ -113,7 +114,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 |---|---|---|
 | **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it's in the trash. The history of changes to an expense lives only in Activity. |
 | **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at | One row per transfer line. A settlement is closed when all its lines are Paid (derived, not stored). |
-| **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Starting set: the 4 recurring bills (rent, Internet, electricity, insurance), all for the 4 roommates (details in private notes). |
+| **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Edited by hand (by Claude); the app only reads it. See "Quick-add templates". |
 | **Activity** | Time, Action, Details | Append-only. |
 | **Ideas** | ID, Created at, Note, Status, Outcome | One row per note, with a sequential integer ID. Status is `Open`, `Done` or `Dropped`: a dropdown on D2:D1000 that rejects any other value, shown as plain text so empty rows stay clean. Outcome is optional. Rows are never deleted. |
 

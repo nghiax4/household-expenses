@@ -155,8 +155,29 @@ describe('handleRequest: expenses', () => {
   it('lists an empty tab', () => {
     expect(handleRequest(body({ passcode: PASSCODE, action: 'listExpenses' }), backend())).toEqual({
       ok: true,
-      value: { people: ['Anh', 'Bảo', 'Chi'], expenses: [], problems: [] },
+      value: {
+        people: ['Anh', 'Bảo', 'Chi'],
+        expenses: [],
+        problems: [],
+        templates: [],
+        templateProblems: [],
+      },
     });
+  });
+
+  it('includes the templates, and keeps working when a template row is broken', () => {
+    const storage = fakeStorage(['Anh', 'Bảo', 'Chi']);
+    storage.tabs.Templates.push(['Internet', 'Anh', 'Anh, Bảo', '55'], ['Gas', 'Zed', 'Anh', '']);
+    const result = handleRequest(
+      body({ passcode: PASSCODE, action: 'listExpenses' }),
+      backend(storage),
+    ) as ApiResponse<'listExpenses'>;
+    expect(result.ok && result.value.templates).toEqual([
+      { name: 'Internet', payer: 'Anh', participants: ['Anh', 'Bảo'], defaultAmount: 5500 },
+    ]);
+    expect(result.ok && result.value.templateProblems).toEqual([
+      `Templates row 3: the payer "Zed" doesn't match any person column in Expenses.`,
+    ]);
   });
 
   it('adds expenses with increasing IDs, logs each one, and returns the tab read back', () => {

@@ -27,6 +27,11 @@ export function formatDollars(cents: Cents): string {
   return `${sign}$${dollars}.${remainder}`;
 }
 
+/** Formats cents the way they'd be typed in an amount box, without "$": 4000 → "40.00". */
+export function formatTypedAmount(cents: Cents): string {
+  return formatDollars(cents).replace('$', '');
+}
+
 // "$1,234.56" or "$1234.56": a dollar sign, correctly grouped digits, exactly two decimals.
 const DOLLARS_PATTERN = /^\$(\d{1,3}(?:,\d{3})*|\d+)\.(\d{2})$/;
 

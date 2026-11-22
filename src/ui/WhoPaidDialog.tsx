@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { callBackend } from '../api/client';
-import { WRONG_PASSCODE, type ExpensesData } from '../api/protocol';
+import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import type { Expense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
 import type { ShareStatus } from '../domain/personCell';
@@ -13,7 +13,7 @@ interface Props {
   /** The household in person-column order. */
   people: readonly PersonName[];
   passcode: string;
-  onSaved: (data: ExpensesData) => void;
+  onSaved: (data: SheetData) => void;
   onCancel: () => void;
   onPasscodeRejected: () => void;
 }

@@ -3,6 +3,7 @@
 import type { Expense, NewExpense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
 import type { ShareStatus } from '../domain/personCell';
+import type { Template } from '../domain/template';
 import type { Result } from '../domain/result';
 
 /** Every request carries the household passcode; the backend rejects it otherwise. */
@@ -20,27 +21,31 @@ export type ApiRequest = { passcode: string } & (
 
 export type ApiAction = ApiRequest['action'];
 
-/** Everything on the Expenses tab, as the app needs it. */
-export interface ExpensesData {
+/** Everything the app reads from the storage sheet: the Expenses tab, plus the Templates tab. */
+export interface SheetData {
   /** Everyone with a column in Expenses, in column order. */
   people: PersonName[];
   /** Every readable row, including the ones in the trash. */
   expenses: Expense[];
   /**
-   * Rows that couldn't be read, explained for whoever fixes them in the sheet. They're left
-   * out of `expenses` rather than guessed at.
+   * Expenses rows that couldn't be read, explained for whoever fixes them in the sheet. They're
+   * left out of `expenses` rather than guessed at.
    */
   problems: string[];
+  /** Quick-fill presets, typed by hand in the Templates tab (the app only reads them). */
+  templates: Template[];
+  /** Templates rows that couldn't be read, explained the same way. */
+  templateProblems: string[];
 }
 
 /** What each action returns when it succeeds. */
 export interface ApiResults {
   checkPasscode: Record<string, never>;
-  listExpenses: ExpensesData;
-  /** The whole tab again, read back after saving, so the app shows exactly what's stored. */
-  addExpense: ExpensesData;
+  listExpenses: SheetData;
+  /** The whole sheet again, read back after saving, so the app shows exactly what's stored. */
+  addExpense: SheetData;
   /** Read back the same way. */
-  setShareStatuses: ExpensesData;
+  setShareStatuses: SheetData;
 }
 
 export type ApiResponse<A extends ApiAction> = Result<ApiResults[A]>;

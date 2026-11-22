@@ -18,6 +18,8 @@ const share = (amount: number, status: 'Paid' | 'Not paid'): PersonCell => ({
 const START = {
   people: PEOPLE,
   problems: ['Row 5: the total "10" isn’t an amount like $12.34 above $0.00.'],
+  templates: [],
+  templateProblems: [],
   expenses: [
     {
       id: 1,
@@ -388,4 +390,48 @@ test('fades the top or bottom edge while there is more to scroll that way', asyn
   await dialog.evaluate((box) => box.scrollTo(0, box.scrollHeight));
   await expect(dialog.getByTestId('fade-top')).toHaveClass(/opacity-100/);
   await expect(dialog.getByTestId('fade-bottom')).toHaveClass(/opacity-0/);
+});
+
+test('quick fill from a template, then save', async ({ page }) => {
+  const requests = await fakeBackend(page, {
+    ...START,
+    templates: [
+      { name: 'Internet', payer: 'Bảo', participants: PEOPLE, defaultAmount: 5500 },
+      { name: 'Electricity', payer: 'Anh', participants: ['Anh', 'Chi'], defaultAmount: null },
+    ],
+    templateProblems: ['Templates row 4: the payer "Zed" doesn’t match any person column.'],
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  await expect(page.getByRole('status')).toContainText('Templates row 4: the payer "Zed"');
+
+  const quickFill = page.getByRole('group', { name: 'Quick fill' });
+  const total = page.getByLabel('Total');
+  const paidBy = page.getByRole('group', { name: 'Paid by' });
+  const between = page.getByRole('group', { name: 'Split between' });
+  const pressed = (group: typeof between) => group.locator('[aria-pressed="true"]');
+
+  // A template without a default leaves Total empty, without opening the keypad (the user
+  // found that annoying).
+  await quickFill.getByRole('button', { name: 'Electricity' }).click();
+  await expect(page.getByLabel('Description', { exact: true })).toHaveValue('Electricity');
+  await expect(total).toHaveValue('');
+  await expect(total).not.toBeFocused();
+  await expect(pressed(paidBy)).toHaveText(['Anh']);
+  await expect(pressed(between)).toHaveText(['Anh', 'Chi']);
+
+  // Another template replaces everything, people included.
+  await quickFill.getByRole('button', { name: 'Internet' }).click();
+  await expect(total).toHaveValue('55.00');
+  await expect(pressed(paidBy)).toHaveText(['Bảo']);
+  await expect(pressed(between)).toHaveText(PEOPLE);
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByRole('heading', { name: 'Add expense' })).toHaveCount(0);
+  const added = requests.at(-1);
+  expect(added?.action === 'addExpense' && added.expense).toMatchObject({
+    description: 'Internet',
+    total: 5500,
+    payer: 'Bảo',
+    shares: { Anh: 1375, Bảo: 1375, Chi: 1375, Dương: 1375 },
+  });
 });

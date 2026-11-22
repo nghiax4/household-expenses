@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { formatDollars, parseTypedAmount, sum, type Cents, type PersonName } from '../domain/money';
+import {
+  formatDollars,
+  formatTypedAmount,
+  parseTypedAmount,
+  sum,
+  type Cents,
+  type PersonName,
+} from '../domain/money';
 import { fail, type Result } from '../domain/result';
 import {
   formatPercent,
@@ -58,7 +65,9 @@ export function SplitPicker({
       mode,
       amounts:
         mode === 'amounts' && amounts?.ok
-          ? Object.fromEntries([...amounts.value].map(([p, cents]) => [p, typedDollars(cents)]))
+          ? Object.fromEntries(
+              [...amounts.value].map(([p, cents]) => [p, formatTypedAmount(cents)]),
+            )
           : typed.amounts,
       percents:
         mode === 'percent' && percents.ok
@@ -157,11 +166,6 @@ export function SplitPicker({
       )}
     </fieldset>
   );
-}
-
-/** "5.00" for 500 cents: how the amount boxes start out after switching to Amounts. */
-function typedDollars(cents: Cents): string {
-  return formatDollars(cents).replace('$', '');
 }
 
 /** How far the typed boxes are from adding up: "$2.00 left to split", "✓ Adds up to 100%". */
