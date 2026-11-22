@@ -286,7 +286,10 @@ test('an expense only the payer shares has nothing to mark', async ({ page }) =>
 });
 
 test('a slow save shows a seconds counter, and gives up after a minute', async ({ page }) => {
-  await page.clock.install();
+  // Paused, so only runFor moves time: a busy test machine can't add real seconds.
+  const now = new Date();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(new Date(now.getTime() + 1_000));
   await fakeBackend(page, START);
   // A backend that never answers this one request.
   await page.route(BACKEND_URL, async (route) => {
@@ -358,4 +361,31 @@ test('splits by typed amounts or percentages, starting from the equal split', as
   await expect(page.getByRole('heading', { name: 'Add expense' })).toHaveCount(0);
   const added = requests.at(-1);
   expect(added?.action === 'addExpense' && added.expense.shares).toEqual({ Anh: 700, Chi: 300 });
+});
+
+test('fades the top or bottom edge while there is more to scroll that way', async ({ page }) => {
+  await fakeBackend(page, START);
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Add expense' }).click();
+
+  // The page: at the top, only "more below"; at the bottom, only "more above".
+  const pageTop = page.getByTestId('fade-top').first();
+  const pageBottom = page.getByTestId('fade-bottom').last();
+  await expect(pageTop).toHaveClass(/opacity-0/);
+  await expect(pageBottom).toHaveClass(/opacity-100/);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(pageTop).toHaveClass(/opacity-100/);
+  await expect(pageBottom).toHaveClass(/opacity-0/);
+
+  // A box that scrolls inside itself gets its own fades.
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page.setViewportSize({ width: 390, height: 380 });
+  await page.getByRole('button', { name: 'Mark who paid' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByTestId('fade-top')).toHaveClass(/opacity-0/);
+  await expect(dialog.getByTestId('fade-bottom')).toHaveClass(/opacity-100/);
+  await dialog.evaluate((box) => box.scrollTo(0, box.scrollHeight));
+  await expect(dialog.getByTestId('fade-top')).toHaveClass(/opacity-100/);
+  await expect(dialog.getByTestId('fade-bottom')).toHaveClass(/opacity-0/);
 });
