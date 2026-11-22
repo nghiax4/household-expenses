@@ -1,0 +1,2 @@
+# Always check files out with LF endings, which Prettier expects, even where git converts to CRLF.
+* text=auto eol=lf

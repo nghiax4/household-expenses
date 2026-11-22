@@ -2,6 +2,11 @@
 
 Older session log entries moved here from `progress.md`, which keeps only the 5 most recent. Newest first.
 
+### 2026-11-17 (second session)
+- The user reviewed the sample sheet again and asked for an explicit **"Not involved"** state in Expenses (decided: plain "Not involved" text, never blank, gray text with no fill).
+- Updated the sample in Chrome: filled every non-participant cell with "Not involved", added the gray formatting rule, and made the validation case-sensitive (`EXACT`). Sheets never validates empty cells, so a separate yellow highlight now flags a blank cell on an expense row.
+- Tested in the sample: lowercase "not involved", junk text in an empty row, and a blank cell on an expense row are all flagged, and valid cells aren't. The test edits were then reverted.
+
 ### 2026-11-17
 - Built a sample storage sheet in the user's personal Drive (generated an xlsx in the scratchpad, imported it into Google Sheets) and checked the settlement math against the source data.
 - Decided: storage lives in the personal Gmail account; the payer absorbs leftover rounding cents; Expenses drops Created by / Created at (Activity is the single record of who did what); no "Settling" status at all; guiding principle: the storage sheet should read like the app.

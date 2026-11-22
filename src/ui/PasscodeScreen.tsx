@@ -1,24 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { callBackend } from '../api/client';
-import { NumberPad } from './input/NumberPad';
-import { applyNumberPadKey, type NumberFormat, type NumberPadKey } from './input/numberEntry';
 
 interface Props {
   onUnlocked: (passcode: string) => void;
 }
 
-// Longer than any household code we'd pick; it just keeps the dots on one line.
-const PASSCODE_FORMAT: NumberFormat = { kind: 'digits', maxLength: 8 };
+// Longer than any household code we'd pick; it only stops runaway typing.
+const MAX_PASSCODE_LENGTH = 8;
 
 export function PasscodeScreen({ onUnlocked }: Props) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-
-  function handleKey(key: NumberPadKey) {
-    setPasscode((text) => applyNumberPadKey(text, key, PASSCODE_FORMAT));
-    setError(null);
-  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -37,24 +30,28 @@ export function PasscodeScreen({ onUnlocked }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-3">
-      <p id="passcode-label" className="font-medium">
+      <label htmlFor="passcode" className="font-medium">
         Household passcode
-      </p>
-      {/* Dots, not a text box: a text box would open the iOS keyboard. */}
-      <output
-        aria-labelledby="passcode-label"
-        className="flex h-12 items-center justify-center gap-3 rounded-lg border border-slate-300 text-2xl"
-      >
-        {Array.from(passcode, (_, i) => (
-          <span key={i}>•</span>
-        ))}
-      </output>
-      {/* Always takes up its line, so the pad never shifts between taps when an error
-          appears or clears. */}
+      </label>
+      {/* A text box rather than type="password": it reliably brings up the iPhone's digit keypad
+          and doesn't make Safari offer to save a password. The dots come from text-security. */}
+      <input
+        id="passcode"
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        value={passcode}
+        onChange={(event) => {
+          setPasscode(event.target.value.replace(/\D/g, '').slice(0, MAX_PASSCODE_LENGTH));
+          setError(null);
+        }}
+        className="h-12 rounded-lg border border-slate-300 text-center indent-[0.5em] text-2xl tracking-[0.5em] [-webkit-text-security:disc]"
+      />
+      {/* Always takes up its line, so the button below never shifts when an error appears or
+          clears. */}
       <p role="alert" className="min-h-5 text-sm text-red-700">
         {error}
       </p>
-      <NumberPad onKey={handleKey} showDecimalPoint={false} />
       <button
         type="submit"
         disabled={checking || passcode === ''}

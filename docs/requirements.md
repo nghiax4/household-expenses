@@ -8,18 +8,15 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - **Mobile-first.** Adding an expense on a phone right after paying must be fast. That's the main pain point with sheet2.
 - **Everyone uses an iPhone**, so the app must work well in Safari (WebKit), including Add to Home Screen. Android doesn't need special attention.
 - **English UI.** Descriptions and names can be in any language (Vietnamese diacritics must display correctly).
-- **No iOS keyboard or pickers.** The app never opens the system keyboard or the slide-up date wheel; every field uses on-page controls instead. See "Input" below.
+- **Typing uses the iPhone keyboard** (revised 2026-11-20). See "Input" below.
 
-## Input (no iOS keyboard; added 2026-11-20)
-- **Why:** on the household's iPhones the iOS keyboard is slow to slide up and slow to type on. On-page buttons respond like any other tap.
-- **Numbers** (passcode, total, custom split amounts, percentages): an **in-app number pad** with 0–9, `.` and ⌫. The passcode pad has no `.`.
-- **Text** (description, note, Ideas, template names, new people, search): an **in-app letter keyboard**, used **everywhere** text is typed. It has Shift, space, ⌫, and a `123` layer for digits and common punctuation (e.g., `/ - , . ' & ( )`), so "Tiền nhà 11/2026" can be typed.
-  - **Vietnamese via Telex:** `aa`→â, `aw`→ă, `ee`→ê, `oo`→ô, `ow`→ơ, `uw`→ư (`w` on its own → ư), `dd`→đ. Tones: `s` sắc, `f` huyền, `r` hỏi, `x` ngã, `j` nặng, `z` removes the tone. Pressing the same mark key again undoes the mark and types the plain letter (`ass` → "as").
-  - **Tone placement: modern style** (hòa, thủy): a vowel with a hat or horn (â ă ê ô ơ ư) takes the mark; otherwise, with no final consonant the second-to-last vowel takes it (hòa, thủy, ngoài, khuỷu), and with a final consonant the last vowel does (toán, hoàng). The `u` in `qu` and the `i` in `gi` count as part of the consonant (quá, giá). (The user accepted either style; the classic one needs extra special cases for oa, oe and uy.)
-  - **VN/EN key**, VN by default. Even in VN mode, keys turn into marks only when the result is a valid Vietnamese syllable, so most English words (e.g., "Costco") type normally without switching.
-- **Date:** defaults to today, with **Today / Yesterday** buttons and a small **in-app calendar** for older dates (also used by the date-range filter).
+## Input (revised 2026-11-20)
+- **Text** (description, note, Ideas, template names, new people, search): normal text boxes with the **iPhone keyboard**. Vietnamese comes from the phone's own Vietnamese keyboard (Telex or VNI, set up in iOS Settings), and paste, autocorrect and dictation work.
+  - Text in a text box is **at least 16px**; smaller text makes Safari zoom the page in when the box is tapped.
+- **Numbers** (passcode, total, custom split amounts, percentages): text boxes that ask for the **iPhone's number keypad**: the digit keypad (`inputmode="numeric"`) for the passcode, the keypad with a `.` (`inputmode="decimal"`) for amounts and percentages. These keypads have no Done key, so tapping elsewhere closes them. The passcode box keeps only digits as you type; amounts are checked when saving (a number, more than $0.00, at most 2 decimals) with a clear message instead of blocking keys.
+- **Date:** defaults to today, with **Today / Yesterday** buttons and the **iPhone's date picker** for older dates (also used by the date-range filter).
 - **Description shortcut:** recently used descriptions appear as **tap-to-fill chips**, so common expenses need no typing.
-- Accepted costs: no paste, autocorrect or dictation.
+- History: on 2026-11-20 the app briefly had its own letter keyboard with Vietnamese Telex, because the iPhone keyboard had felt slow. The user tried both on their phone and preferred the iPhone keyboard (the slow feel was likely Safari's page zoom being at 50%). The custom keyboard was removed before it was ever committed.
 
 ## People
 - Starts with the 7 people from sheet2 (4 roommates plus 3 occasional; names in private notes). Names may contain Vietnamese diacritics.
