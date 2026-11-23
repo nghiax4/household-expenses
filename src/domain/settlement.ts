@@ -205,15 +205,19 @@ export function pendingSettlement(settlements: readonly Settlement[]): Settlemen
 }
 
 /**
- * The pending settlement that covers this expense, if any. While it's pending, the expense
- * can't be edited, deleted or marked: that would change amounts the settlement already used.
+ * The settlement that took in this expense, if any: the earliest one, not cancelled, that
+ * covers it. While that settlement is pending, and for good once it's closed, the expense
+ * can't be edited, deleted or marked: that would change amounts the settlement already used
+ * (or that money already moved for).
  */
-export function lockingSettlement(
+export function coveringSettlement(
   settlements: readonly Settlement[],
   expenseId: number,
 ): Settlement | null {
-  const pending = pendingSettlement(settlements);
-  return pending && expenseId <= pending.coversUpToId ? pending : null;
+  const covering = settlements.filter(
+    (s) => settlementState(s) !== 'cancelled' && expenseId <= s.coversUpToId,
+  );
+  return covering.sort((a, b) => a.id - b.id)[0] ?? null;
 }
 
 /** A line's new status, as the app sends it. Lines are known by who pays whom. */

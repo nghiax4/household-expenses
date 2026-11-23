@@ -8,8 +8,11 @@ interface Props {
   /** The household in person-column order, so chips always appear in the same order. */
   people: readonly PersonName[];
   today: string;
-  /** The pending settlement that covers this expense, if any: it can't change until that's done. */
-  lockedBy: number | null;
+  /**
+   * The settlement that took in this expense, if any. While it's pending the expense can't
+   * change; once it's closed (paid off), never again.
+   */
+  lock: { settlementId: number; paidOff: boolean } | null;
   onMarkWhoPaid: () => void;
   onEdit: () => void;
 }
@@ -17,7 +20,7 @@ interface Props {
 const CARD_BUTTON =
   'h-9 rounded-full border border-slate-400 px-4 text-sm font-medium active:bg-slate-100';
 
-export function ExpenseCard({ expense, people, today, lockedBy, onMarkWhoPaid, onEdit }: Props) {
+export function ExpenseCard({ expense, people, today, lock, onMarkWhoPaid, onEdit }: Props) {
   const sharers = people.filter((person) => expense.people[person]?.kind === 'share');
   return (
     <li className="rounded-xl border border-slate-200 p-3">
@@ -43,11 +46,13 @@ export function ExpenseCard({ expense, people, today, lockedBy, onMarkWhoPaid, o
           );
         })}
       </ul>
-      {lockedBy !== null ? (
+      {lock?.paidOff ? (
+        // Money already moved for it, so changing it would make the settlement wrong.
+        <p className="mt-3 text-sm text-slate-600">Paid off in settlement #{lock.settlementId}.</p>
+      ) : lock ? (
         // Changing it now would change amounts the settlement already worked out.
         <p className="mt-3 text-sm text-slate-600">
-          In settlement #{lockedBy}, so it can’t be changed until every transfer is paid (see Settle
-          up).
+          In settlement #{lock.settlementId}, so it can’t be changed (see Settle up).
         </p>
       ) : (
         <div className="mt-3 flex gap-2">

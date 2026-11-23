@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { SheetData } from '../src/api/protocol';
+import { BACKEND_URL } from '../src/api/client';
+import type { ApiRequest, SheetData } from '../src/api/protocol';
 import type { Expense } from '../src/domain/expense';
 import type { PersonCell } from '../src/domain/personCell';
 import type { Settlement } from '../src/domain/settlement';
 import { localDate } from '../src/ui/dates';
-import { fakeBackend, PEOPLE, rememberPasscode } from './fakeBackend';
+import { fakeBackend, PASSCODE, PEOPLE, rememberPasscode } from './fakeBackend';
 
 const NI: PersonCell = { kind: 'notInvolved' };
 const share = (amount: number, status: 'Paid' | 'Not paid'): PersonCell => ({
@@ -168,12 +169,13 @@ test('ticks transfers off, and ticking the last one closes the settlement', asyn
   await expect(past).toContainText('Settlement #1');
   await expect(past).toContainText('Paid off');
 
-  // Every covered share is now paid back, and the expenses are unlocked.
+  // Every covered share is now paid back, and the expenses stay locked for good.
   await tab(page, 'Expenses').click();
   await expect(
     card(page, 'Groceries').getByRole('list', { name: 'Shares' }).getByRole('listitem'),
   ).toHaveText(['✓ Anh $15.00, paid', '✓ Bảo $15.00, paid', '✓ Chi $15.00, paid']);
-  await expect(card(page, 'Groceries').getByRole('button', { name: 'Edit' })).toBeVisible();
+  await expect(card(page, 'Groceries')).toContainText('Paid off in settlement #1.');
+  await expect(card(page, 'Groceries').getByRole('button')).toHaveCount(0);
 });
 
 test('cancels a settlement, asking first, which unlocks its expenses', async ({ page }) => {
@@ -254,4 +256,70 @@ test('marks shares paid right away when they cancel each other out', async ({ pa
   await expect(card(page, 'Groceries').getByRole('list', { name: 'Shares' })).toHaveText(
     '✓ Bảo $5.00, paid',
   );
+});
+
+/** Another phone saving something, behind this phone's back (through the same fake backend). */
+async function otherPhone(page: Page, request: ApiRequest) {
+  await page.evaluate(
+    async ([url, body]) => {
+      await fetch(url, { method: 'POST', body });
+    },
+    [BACKEND_URL, JSON.stringify(request)] as const,
+  );
+}
+
+test('refuses a Mark who paid made on old data, and shows the latest on a tap', async ({
+  page,
+}) => {
+  await fakeBackend(page, START);
+  await page.goto('/');
+  await card(page, 'Groceries').getByRole('button', { name: 'Mark who paid' }).click();
+  const dialog = page.getByRole('dialog');
+
+  await otherPhone(page, {
+    passcode: PASSCODE,
+    action: 'setShareStatuses',
+    expenseId: 1,
+    seen: START.expenses[0]!,
+    statuses: { Chi: 'Paid' },
+  });
+  await dialog.getByRole('checkbox', { name: 'Bảo paid back' }).check();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  // Nothing changes on screen until the user has read why.
+  await expect(dialog.getByRole('alert')).toContainText('another device');
+  await expect(dialog).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Show the latest' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    card(page, 'Groceries').getByRole('list', { name: 'Shares' }).getByRole('listitem'),
+  ).toHaveText(['✓ Anh $15.00, paid', 'Bảo $15.00, not paid', '✓ Chi $15.00, paid']);
+});
+
+test('refuses ticking transfers on old data, so a settlement never closes unwarned', async ({
+  page,
+}) => {
+  await fakeBackend(page, { ...START, settlements: [PENDING] });
+  await page.goto('/');
+  await tab(page, 'Settle up').click();
+  await page.getByRole('button', { name: 'Mark transfers paid' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Which transfers have been sent?' });
+
+  await otherPhone(page, {
+    passcode: PASSCODE,
+    action: 'setTransferStatuses',
+    settlementId: 1,
+    seen: PENDING,
+    statuses: [{ from: 'Chi', to: 'Anh', status: 'Paid' }],
+  });
+  // This phone still shows Chi's line unticked, so it doesn't warn that saving would close it.
+  await dialog.getByRole('checkbox', { name: 'Dương paid Bảo' }).check();
+  await expect(dialog.getByText('saving closes the settlement')).toBeHidden();
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('another device');
+
+  await dialog.getByRole('button', { name: 'Show the latest' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(transfers(page)).toHaveText([/Chi.*Anh.*, paid/, /Dương.*Bảo.*not paid/]);
+  await expect(page.getByRole('button', { name: 'Mark transfers paid' })).toBeVisible();
 });

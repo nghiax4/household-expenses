@@ -8,8 +8,9 @@ import {
 } from '../../src/domain/expense';
 import type { PersonName } from '../../src/domain/money';
 import { fail, ok, type Result } from '../../src/domain/result';
+import { sameData } from '../../src/domain/sameData';
 import {
-  lockingSettlement,
+  coveringSettlement,
   paidOffExpenses,
   pendingSettlement,
   proposeSettlement,
@@ -18,7 +19,6 @@ import {
   withTransferStatuses,
   type Settlement,
   type Transfer,
-  type TransferStatus,
 } from '../../src/domain/settlement';
 import { literal, type SheetCell } from './cells';
 import {
@@ -95,15 +95,15 @@ export function handleRequest(rawBody: string, backend: Backend): Result<unknown
     case 'setShareStatuses':
       return setShareStatuses(request, backend);
     case 'editExpense':
-      return editExpense(request.expenseId, request.expense, backend);
+      return editExpense(request, backend);
     case 'deleteExpense':
-      return deleteExpense(request.expenseId, backend);
+      return deleteExpense(request, backend);
     case 'createSettlement':
       return createSettlement(request.coversUpToId, request.transfers, backend);
     case 'setTransferStatuses':
-      return setTransferStatuses(request.settlementId, request.statuses, backend);
+      return setTransferStatuses(request, backend);
     case 'cancelSettlement':
-      return cancelSettlement(request.settlementId, backend);
+      return cancelSettlement(request, backend);
   }
 }
 
@@ -125,10 +125,10 @@ function addExpense(input: NewExpense, { storage, now }: Backend): Result<SheetD
 }
 
 function setShareStatuses(
-  { expenseId, statuses }: ShareStatusesRequest,
+  { expenseId, seen, statuses }: RequestFor<'setShareStatuses'>,
   { storage, now }: Backend,
 ): Result<SheetData> {
-  const found = findChangeableExpense(storage, expenseId);
+  const found = findChangeableExpense(storage, expenseId, seen);
   if (!found.ok) {
     return found;
   }
@@ -160,11 +160,10 @@ function setShareStatuses(
 }
 
 function editExpense(
-  expenseId: number,
-  input: NewExpense,
+  { expenseId, seen, expense: input }: RequestFor<'editExpense'>,
   { storage, now }: Backend,
 ): Result<SheetData> {
-  const found = findChangeableExpense(storage, expenseId);
+  const found = findChangeableExpense(storage, expenseId, seen);
   if (!found.ok) {
     return found;
   }
@@ -187,8 +186,11 @@ function editExpense(
  * Hides an expense by filling in its "Deleted at" cell. The row stays in the sheet, so expense
  * IDs are never reused (settlements rely on that) and a mistake can be undone by hand.
  */
-function deleteExpense(expenseId: number, { storage, now }: Backend): Result<SheetData> {
-  const found = findChangeableExpense(storage, expenseId);
+function deleteExpense(
+  { expenseId, seen }: RequestFor<'deleteExpense'>,
+  { storage, now }: Backend,
+): Result<SheetData> {
+  const found = findChangeableExpense(storage, expenseId, seen);
   if (!found.ok) {
     return found;
   }
@@ -200,12 +202,13 @@ function deleteExpense(expenseId: number, { storage, now }: Backend): Result<She
 }
 
 /**
- * A live expense that no pending settlement covers, where its row is, and the household; or why
- * it can't be changed.
+ * A live expense, unchanged since the phone showed it (`seen`), that no settlement locks; where
+ * its row is, and the household. Or why it can't be changed.
  */
 function findChangeableExpense(
   storage: SheetStorage,
   expenseId: number,
+  seen: Expense,
 ): Result<{ people: PersonName[]; expense: Expense; rowNumber: number }> {
   const rows = storage.readTab('Expenses');
   const current = readExpensesTab(rows);
@@ -223,18 +226,37 @@ function findChangeableExpense(
   if (expense.deletedAt !== null) {
     return fail(`"${expense.description}" was deleted.`);
   }
+  if (!sameData(expense, seen)) {
+    return fail(
+      `"${expense.description}" was changed on another device since you opened this, so ` +
+        'nothing was saved.',
+    );
+  }
   const settlements = readSettlementsTab(storage.readTab('Settlements'), current.value.people);
   if (!settlements.ok) {
     return fail(settlements.error);
   }
-  const lock = lockingSettlement(settlements.value, expenseId);
+  const lock = coveringSettlement(settlements.value, expenseId);
+  if (lock && settlementState(lock) === 'closed') {
+    return fail(
+      `"${expense.description}" was paid off in settlement #${lock.id}, so it can’t be ` +
+        'changed anymore. If something about it is wrong, fix it in the sheet.',
+    );
+  }
   if (lock) {
     return fail(
-      `"${expense.description}" is in settlement #${lock.id}, so it can’t be changed until ` +
-        'every transfer is paid or the settlement is cancelled.',
+      `"${expense.description}" is in settlement #${lock.id}, so it can’t be changed unless ` +
+        'that settlement is cancelled.',
     );
   }
   return ok({ people: current.value.people, expense, rowNumber: rowNumber.value });
+}
+
+function changedSettlement(settlementId: number): string {
+  return (
+    `Settlement #${settlementId} was changed on another device since you opened this, so ` +
+    'nothing was saved.'
+  );
 }
 
 const UNREADABLE_EXPENSES =
@@ -268,8 +290,8 @@ function createSettlement(
   }
   if (proposal.coversUpToId !== coversUpToId || !sameTransfers(proposal.transfers, transfers)) {
     return fail(
-      'Something changed since you opened this (another phone saved). Close it and tap ' +
-        'Get total settlement again to see the new transfers.',
+      'Something changed since you opened this (another device saved), so nothing was saved. ' +
+        'Tap Get total settlement again to see the new transfers.',
     );
   }
 
@@ -301,8 +323,7 @@ function createSettlement(
  * Not paid share it covers becomes Paid, in the same request.
  */
 function setTransferStatuses(
-  settlementId: number,
-  statuses: readonly TransferStatus[],
+  { settlementId, seen, statuses }: RequestFor<'setTransferStatuses'>,
   { storage, now }: Backend,
 ): Result<SheetData> {
   const sheet = readSheet(storage);
@@ -313,6 +334,9 @@ function setTransferStatuses(
   const settlement = settlements.find((s) => s.id === settlementId);
   if (!settlement) {
     return fail(`Settlement #${settlementId} isn't in the sheet anymore. Reload the app.`);
+  }
+  if (!sameData(settlement, seen)) {
+    return fail(changedSettlement(settlementId));
   }
   const time = now();
   // Every change is checked before anything is written, so a refusal leaves the sheet as it was.
@@ -347,7 +371,10 @@ function setTransferStatuses(
  * Cancels a settlement nobody has paid into yet, unlocking its expenses. Its rows stay, with
  * "Cancelled at" filled in, so the history is kept and its ID is never reused.
  */
-function cancelSettlement(settlementId: number, { storage, now }: Backend): Result<SheetData> {
+function cancelSettlement(
+  { settlementId, seen }: RequestFor<'cancelSettlement'>,
+  { storage, now }: Backend,
+): Result<SheetData> {
   const sheet = readSheet(storage);
   if (!sheet.ok) {
     return sheet;
@@ -355,6 +382,9 @@ function cancelSettlement(settlementId: number, { storage, now }: Backend): Resu
   const settlement = sheet.value.settlements.find((s) => s.id === settlementId);
   if (!settlement) {
     return fail(`Settlement #${settlementId} isn't in the sheet anymore. Reload the app.`);
+  }
+  if (!sameData(settlement, seen)) {
+    return fail(changedSettlement(settlementId));
   }
   const state = settlementState(settlement);
   if (state === 'cancelled') {
@@ -437,4 +467,4 @@ function readSheet(storage: SheetStorage): Result<SheetData> {
   });
 }
 
-type ShareStatusesRequest = Extract<ApiRequest, { action: 'setShareStatuses' }>;
+type RequestFor<A extends ApiRequest['action']> = Extract<ApiRequest, { action: A }>;

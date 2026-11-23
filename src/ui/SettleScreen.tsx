@@ -9,6 +9,7 @@ import {
   type SettlementProposal,
 } from '../domain/settlement';
 import { formatDate, localDate } from './dates';
+import { SaveFailed } from './SaveFailed';
 import { SettlementPreview } from './SettlementPreview';
 import { TransferLine } from './TransferLine';
 import { TransfersDialog } from './TransfersDialog';
@@ -74,6 +75,7 @@ export function SettleScreen({ data, passcode, onData, onPasscodeRejected }: Pro
       <h2 className="text-xl font-semibold">Settle up</h2>
       {pending ? (
         <PendingSettlement
+          key={pending.id}
           settlement={pending}
           today={today}
           passcode={passcode}
@@ -129,6 +131,10 @@ export function SettleScreen({ data, passcode, onData, onPasscodeRejected }: Pro
               setNotice({ text: 'Done: those shares are all marked paid back.', isError: false });
             }
           }}
+          onLatest={(latest) => {
+            onData(latest);
+            setPreview(null);
+          }}
           onCancel={() => setPreview(null)}
           onPasscodeRejected={onPasscodeRejected}
         />
@@ -166,6 +172,7 @@ function PendingSettlement({
       passcode,
       action: 'cancelSettlement',
       settlementId: settlement.id,
+      seen: settlement,
     });
     setCancelling(false);
     if (result.ok) {
@@ -187,8 +194,8 @@ function PendingSettlement({
           Settlement #{settlement.id}
         </h3>
         <p className="text-sm text-slate-600">
-          Started {formatDate(settlement.createdAt.slice(0, 10), today)}. The expenses added before
-          then are locked until every transfer is marked paid.
+          Started {formatDate(settlement.createdAt.slice(0, 10), today)}. It covers the expenses
+          added before then, which can’t be changed anymore.
         </p>
       </div>
       <TransferList settlement={settlement} />
@@ -238,9 +245,16 @@ function PendingSettlement({
         </div>
       )}
       {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
+        <SaveFailed
+          error={error}
+          passcode={passcode}
+          onLatest={(latest) => {
+            setError(null);
+            setConfirmingCancel(false);
+            onData(latest);
+          }}
+          onPasscodeRejected={onPasscodeRejected}
+        />
       )}
       {marking && (
         <TransfersDialog

@@ -5,6 +5,7 @@ import type { Expense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
 import type { ShareStatus } from '../domain/personCell';
 import { Dialog } from './Dialog';
+import { SaveFailed } from './SaveFailed';
 import { ShareChip } from './ShareChip';
 import { Waiting } from './Waiting';
 
@@ -64,6 +65,7 @@ export function WhoPaidDialog({
       passcode,
       action: 'setShareStatuses',
       expenseId: expense.id,
+      seen: expense,
       statuses: Object.fromEntries(changes),
     });
     setSaving(false);
@@ -121,9 +123,12 @@ export function WhoPaidDialog({
         })}
       </ul>
       {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
+        <SaveFailed
+          error={error}
+          passcode={passcode}
+          onLatest={onSaved}
+          onPasscodeRejected={onPasscodeRejected}
+        />
       )}
       <div className="flex gap-3">
         <button

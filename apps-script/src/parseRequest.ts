@@ -1,9 +1,9 @@
 // Checks the shape of a request body. Business rules (who exists, sums, locks) are checked later,
 // by the handler.
 import type { ApiRequest } from '../../src/api/protocol';
-import type { NewExpense } from '../../src/domain/expense';
+import type { Expense, NewExpense } from '../../src/domain/expense';
 import type { ShareStatus } from '../../src/domain/personCell';
-import type { Transfer, TransferStatus } from '../../src/domain/settlement';
+import type { Settlement, Transfer, TransferStatus } from '../../src/domain/settlement';
 
 /** The request, or null if it's malformed. */
 export function parseRequest(rawBody: string): ApiRequest | null {
@@ -27,24 +27,28 @@ export function parseRequest(rawBody: string): ApiRequest | null {
       return expense && { passcode, action, expense };
     }
     case 'editExpense': {
-      const { expenseId } = body;
+      const { expenseId, seen } = body;
       const expense = parseNewExpense(body.expense);
-      return isId(expenseId) && expense ? { passcode, action, expenseId, expense } : null;
+      return isId(expenseId) && isSeen<Expense>(seen) && expense
+        ? { passcode, action, expenseId, seen, expense }
+        : null;
     }
     case 'deleteExpense': {
-      const { expenseId } = body;
-      return isId(expenseId) ? { passcode, action, expenseId } : null;
+      const { expenseId, seen } = body;
+      return isId(expenseId) && isSeen<Expense>(seen)
+        ? { passcode, action, expenseId, seen }
+        : null;
     }
     case 'setShareStatuses': {
-      const { expenseId, statuses } = body;
-      if (!isId(expenseId) || !isRecord(statuses)) {
+      const { expenseId, seen, statuses } = body;
+      if (!isId(expenseId) || !isSeen<Expense>(seen) || !isRecord(statuses)) {
         return null;
       }
       const entries = Object.entries(statuses);
       if (!entries.every((entry): entry is [string, ShareStatus] => isShareStatus(entry[1]))) {
         return null;
       }
-      return { passcode, action, expenseId, statuses: Object.fromEntries(entries) };
+      return { passcode, action, expenseId, seen, statuses: Object.fromEntries(entries) };
     }
     case 'createSettlement': {
       const { coversUpToId, transfers } = body;
@@ -53,14 +57,19 @@ export function parseRequest(rawBody: string): ApiRequest | null {
         : null;
     }
     case 'setTransferStatuses': {
-      const { settlementId, statuses } = body;
-      return isId(settlementId) && Array.isArray(statuses) && statuses.every(isTransferStatus)
-        ? { passcode, action, settlementId, statuses }
+      const { settlementId, seen, statuses } = body;
+      return isId(settlementId) &&
+        isSeen<Settlement>(seen) &&
+        Array.isArray(statuses) &&
+        statuses.every(isTransferStatus)
+        ? { passcode, action, settlementId, seen, statuses }
         : null;
     }
     case 'cancelSettlement': {
-      const { settlementId } = body;
-      return isId(settlementId) ? { passcode, action, settlementId } : null;
+      const { settlementId, seen } = body;
+      return isId(settlementId) && isSeen<Settlement>(seen)
+        ? { passcode, action, settlementId, seen }
+        : null;
     }
     default:
       return null;
@@ -106,6 +115,14 @@ function isTransferStatus(value: unknown): value is TransferStatus {
     typeof value.to === 'string' &&
     isShareStatus(value.status)
   );
+}
+
+/**
+ * What the phone saw only needs to be an object here: the handler compares it with the sheet,
+ * and anything malformed simply won't match.
+ */
+function isSeen<T>(value: unknown): value is T {
+  return isRecord(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

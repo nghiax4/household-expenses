@@ -4,6 +4,7 @@ import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import type { Expense } from '../domain/expense';
 import { paidOffExpenses, type SettlementProposal } from '../domain/settlement';
 import { Dialog } from './Dialog';
+import { SaveFailed } from './SaveFailed';
 import { TransferLine } from './TransferLine';
 import { Waiting } from './Waiting';
 
@@ -12,6 +13,8 @@ interface Props {
   expenses: readonly Expense[];
   passcode: string;
   onSaved: (data: SheetData) => void;
+  /** The sheet read fresh after a failed Create; the caller shows it and closes the preview. */
+  onLatest: (data: SheetData) => void;
   onCancel: () => void;
   onPasscodeRejected: () => void;
 }
@@ -25,6 +28,7 @@ export function SettlementPreview({
   expenses,
   passcode,
   onSaved,
+  onLatest,
   onCancel,
   onPasscodeRejected,
 }: Props) {
@@ -78,15 +82,18 @@ export function SettlementPreview({
             ))}
           </ul>
           <p className="text-sm text-slate-600">
-            Those expenses are locked until every transfer is marked paid. Expenses added after this
-            go into the next settlement.
+            From now on those expenses can’t be changed, and once every transfer is marked paid,
+            that’s final. Expenses added after this go into the next settlement.
           </p>
         </>
       )}
       {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
+        <SaveFailed
+          error={error}
+          passcode={passcode}
+          onLatest={onLatest}
+          onPasscodeRejected={onPasscodeRejected}
+        />
       )}
       <div className="flex gap-3">
         <button

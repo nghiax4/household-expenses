@@ -44,7 +44,7 @@ export async function callBackend<A extends ApiAction>(
       return fail(
         READS.has(request.action)
           ? 'The server didn’t answer within a minute. Try again.'
-          : 'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.',
+          : 'The server didn’t answer within a minute. It may still have saved: tap Show the latest to check before trying again.',
       );
     }
     return fail('Couldn’t reach the server. Check your internet connection and try again.');

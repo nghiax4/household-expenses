@@ -49,6 +49,26 @@ function backend(storage = fakeStorage(['Anh', 'Bảo', 'Chi'])): Backend {
   return { passcode: PASSCODE, storage, now: () => '2026-11-21 14:05' };
 }
 
+/**
+ * Sends a request the way a phone that has just loaded the sheet would: `seen` (the expense or
+ * settlement as the phone shows it) is filled in from what's stored now, unless the test gives
+ * one to act as a phone showing old data.
+ */
+function fromFreshPhone(b: Backend, request: Record<string, unknown>) {
+  const listed = handleRequest(
+    body({ passcode: PASSCODE, action: 'listExpenses' }),
+    b,
+  ) as ApiResponse<'listExpenses'>;
+  const data = listed.ok ? listed.value : null;
+  const seen =
+    request.seen ??
+    (typeof request.expenseId === 'number'
+      ? data?.expenses.find((e) => e.id === request.expenseId)
+      : data?.settlements.find((s) => s.id === request.settlementId)) ??
+    {};
+  return handleRequest(body({ passcode: PASSCODE, ...request, seen }), b);
+}
+
 describe('handleRequest: passcode and request shape', () => {
   it('accepts the right passcode', () => {
     expect(handleRequest(body({ passcode: PASSCODE, action: 'checkPasscode' }), backend())).toEqual(
@@ -328,10 +348,11 @@ describe('handleRequest: marking shares paid', () => {
   }
 
   const mark = (b: Backend, statuses: Record<string, string>, expenseId = 1) =>
-    handleRequest(
-      body({ passcode: PASSCODE, action: 'setShareStatuses', expenseId, statuses }),
-      b,
-    ) as ApiResponse<'setShareStatuses'>;
+    fromFreshPhone(b, {
+      action: 'setShareStatuses',
+      expenseId,
+      statuses,
+    }) as ApiResponse<'setShareStatuses'>;
 
   it('marks several shares at once, logging each change and returning the tab read back', () => {
     const storage = withPizza();
@@ -444,15 +465,9 @@ describe('handleRequest: editing and deleting', () => {
     return storage;
   }
   const edit = (b: Backend, expense: NewExpense, expenseId = 1) =>
-    handleRequest(
-      body({ passcode: PASSCODE, action: 'editExpense', expenseId, expense }),
-      b,
-    ) as ApiResponse<'editExpense'>;
+    fromFreshPhone(b, { action: 'editExpense', expenseId, expense }) as ApiResponse<'editExpense'>;
   const remove = (b: Backend, expenseId = 1) =>
-    handleRequest(
-      body({ passcode: PASSCODE, action: 'deleteExpense', expenseId }),
-      b,
-    ) as ApiResponse<'deleteExpense'>;
+    fromFreshPhone(b, { action: 'deleteExpense', expenseId }) as ApiResponse<'deleteExpense'>;
 
   it('rewrites the row, keeps who had paid back, and logs exactly what changed', () => {
     const storage = withPizza();
@@ -530,15 +545,11 @@ describe('handleRequest: editing and deleting', () => {
     expect(remove(backend(storage))).toEqual(refused);
     expect(edit(backend(storage), pizza)).toEqual(refused);
     expect(
-      handleRequest(
-        body({
-          passcode: PASSCODE,
-          action: 'setShareStatuses',
-          expenseId: 1,
-          statuses: { Chi: 'Paid' },
-        }),
-        backend(storage),
-      ),
+      fromFreshPhone(backend(storage), {
+        action: 'setShareStatuses',
+        expenseId: 1,
+        statuses: { Chi: 'Paid' },
+      }),
     ).toEqual(refused);
     expect(storage.tabs.Activity).toHaveLength(2);
   });
@@ -569,8 +580,8 @@ describe('handleRequest: settlements', () => {
   const locked = (description: string) => ({
     ok: false,
     error:
-      `"${description}" is in settlement #1, so it can’t be changed until every transfer is ` +
-      'paid or the settlement is cancelled.',
+      `"${description}" is in settlement #1, so it can’t be changed unless that settlement is ` +
+      'cancelled.',
   });
 
   function withExpenses(...rows: string[][]) {
@@ -580,7 +591,7 @@ describe('handleRequest: settlements', () => {
   }
   // Every action answers with the sheet's data, like listExpenses.
   const send = (b: Backend, request: Record<string, unknown>) =>
-    handleRequest(body({ passcode: PASSCODE, ...request }), b) as ApiResponse<'listExpenses'>;
+    fromFreshPhone(b, request) as ApiResponse<'listExpenses'>;
   const create = (b: Backend, transfers: unknown = TRANSFERS, coversUpToId = 2) =>
     send(b, { action: 'createSettlement', coversUpToId, transfers });
   const markTransfers = (b: Backend, statuses: unknown[], settlementId = 1) =>
@@ -722,12 +733,23 @@ describe('handleRequest: settlements', () => {
     const lines = closed.ok ? closed.value.settlements[0]?.lines : [];
     expect(lines?.map((line) => line.status)).toEqual(['Paid', 'Paid']);
 
-    // Closed: the lines can't be unticked, and the expenses are unlocked.
+    // Closed is final: the lines can't be unticked, and the expenses stay locked for good.
     expect(markTransfers(b, [{ from: 'Chi', to: 'Anh', status: 'Not paid' }])).toEqual({
       ok: false,
       error: 'Settlement #1 is already closed: every transfer was paid.',
     });
-    expect(send(b, { action: 'deleteExpense', expenseId: 1 }).ok).toBe(true);
+    const settled = (description: string) => ({
+      ok: false,
+      error:
+        `"${description}" was paid off in settlement #1, so it can’t be changed anymore. ` +
+        'If something about it is wrong, fix it in the sheet.',
+    });
+    const paidOff = storage.tabs.Expenses.slice(1);
+    expect(
+      send(b, { action: 'setShareStatuses', expenseId: 1, statuses: { Chi: 'Not paid' } }),
+    ).toEqual(settled('Groceries'));
+    expect(send(b, { action: 'deleteExpense', expenseId: 2 })).toEqual(settled('Internet'));
+    expect(storage.tabs.Expenses.slice(1)).toEqual(paidOff);
   });
 
   it('unticks a transfer, and refuses an unknown one without writing anything', () => {
@@ -837,6 +859,92 @@ describe('handleRequest: settlements', () => {
       ok: false,
       error:
         'Settlements row 2: "Zed" doesn\'t match any person column in Expenses. Fix it in the sheet.',
+    });
+  });
+
+  describe('a phone showing old data', () => {
+    const changedExpense = {
+      ok: false,
+      error:
+        '"Groceries" was changed on another device since you opened this, so nothing was saved.',
+    };
+    const changedSettlement = {
+      ok: false,
+      error:
+        'Settlement #1 was changed on another device since you opened this, so nothing was saved.',
+    };
+    const listed = (b: Backend) => {
+      const result = send(b, { action: 'listExpenses' });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result.value;
+    };
+
+    it('can’t edit, delete or mark an expense another phone changed since', () => {
+      const storage = withExpenses(GROCERIES, INTERNET);
+      const b = backend(storage);
+      const old = listed(b).expenses[0];
+      // Another phone makes Bảo the payer.
+      send(b, {
+        action: 'editExpense',
+        expenseId: 1,
+        expense: {
+          date: '2026-11-20',
+          description: 'Groceries',
+          total: 4500,
+          payer: 'Bảo',
+          note: '',
+          shares: { Anh: 1500, Bảo: 1500, Chi: 1500 },
+        },
+      });
+      const afterOtherPhone = structuredClone(storage.tabs);
+
+      // This phone still shows Anh as the payer: ticking Chi would record money paid to the
+      // wrong person, and an edit or delete would undo or drop the other phone's change.
+      const stale = { expenseId: 1, seen: old };
+      expect(send(b, { action: 'setShareStatuses', ...stale, statuses: { Chi: 'Paid' } })).toEqual(
+        changedExpense,
+      );
+      expect(
+        send(b, {
+          action: 'editExpense',
+          ...stale,
+          expense: {
+            date: '2026-11-20',
+            description: 'Groceries',
+            total: 4500,
+            payer: 'Anh',
+            note: 'changed',
+            shares: { Anh: 1500, Bảo: 1500, Chi: 1500 },
+          },
+        }),
+      ).toEqual(changedExpense);
+      expect(send(b, { action: 'deleteExpense', ...stale })).toEqual(changedExpense);
+      expect(storage.tabs).toEqual(afterOtherPhone);
+    });
+
+    it('can’t tick or cancel a settlement another phone changed since', () => {
+      const storage = withExpenses(GROCERIES, INTERNET);
+      const b = backend(storage);
+      create(b);
+      const old = listed(b).settlements[0];
+      // Another phone ticks Chi's transfer.
+      markTransfers(b, [{ from: 'Chi', to: 'Anh', status: 'Paid' }]);
+      const afterOtherPhone = structuredClone(storage.tabs);
+
+      // This phone shows nothing ticked. Ticking Dương's line would close the settlement for
+      // good without this phone ever warning that it would.
+      const stale = { settlementId: 1, seen: old };
+      expect(
+        send(b, {
+          action: 'setTransferStatuses',
+          ...stale,
+          statuses: [{ from: 'Dương', to: 'Bảo', status: 'Paid' }],
+        }),
+      ).toEqual(changedSettlement);
+      expect(send(b, { action: 'cancelSettlement', ...stale })).toEqual(changedSettlement);
+      expect(storage.tabs).toEqual(afterOtherPhone);
     });
   });
 });

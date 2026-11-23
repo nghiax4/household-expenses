@@ -8,13 +8,15 @@ import {
   type Expense,
 } from '../src/domain/expense';
 import { fail, ok, type Result } from '../src/domain/result';
+import { sameData } from '../src/domain/sameData';
 import {
-  lockingSettlement,
+  coveringSettlement,
   paidOffExpenses,
   proposeSettlement,
   sameTransfers,
   settlementState,
   withTransferStatuses,
+  type Settlement,
 } from '../src/domain/settlement';
 
 // Made-up people (the repo is public), in person-column order.
@@ -53,10 +55,28 @@ export async function fakeBackend(
     const replaceExpense = (expense: Expense) => {
       data = { ...data, expenses: data.expenses.map((e) => (e.id === expense.id ? expense : e)) };
     };
-    const lockedFor = (expenseId: number): Result<never> | null => {
-      const lock = lockingSettlement(data.settlements, expenseId);
+    // Like the backend: refused if this phone saw something other than what's stored now.
+    const staleOrLocked = (expenseId: number, seen: Expense): Result<never> | null => {
+      const current = data.expenses.find((e) => e.id === expenseId);
+      if (!sameData(current, seen)) {
+        return fail(
+          `"${current?.description}" was changed on another device since you opened this, so ` +
+            'nothing was saved.',
+        );
+      }
+      const lock = coveringSettlement(data.settlements, expenseId);
       return lock && fail(`In settlement #${lock.id}.`);
     };
+    const staleSettlement = (settlementId: number, seen: Settlement): Result<never> | null =>
+      sameData(
+        data.settlements.find((s) => s.id === settlementId),
+        seen,
+      )
+        ? null
+        : fail(
+            `Settlement #${settlementId} was changed on another device since you opened this, so ` +
+              'nothing was saved.',
+          );
 
     switch (request.action) {
       case 'checkPasscode':
@@ -73,7 +93,7 @@ export async function fakeBackend(
         return ok(data);
       }
       case 'editExpense': {
-        const locked = lockedFor(request.expenseId);
+        const locked = staleOrLocked(request.expenseId, request.seen);
         if (locked) {
           return locked;
         }
@@ -88,7 +108,7 @@ export async function fakeBackend(
         return ok(data);
       }
       case 'deleteExpense': {
-        const locked = lockedFor(request.expenseId);
+        const locked = staleOrLocked(request.expenseId, request.seen);
         if (locked) {
           return locked;
         }
@@ -99,7 +119,7 @@ export async function fakeBackend(
         return ok(data);
       }
       case 'setShareStatuses': {
-        const locked = lockedFor(request.expenseId);
+        const locked = staleOrLocked(request.expenseId, request.seen);
         if (locked) {
           return locked;
         }
@@ -140,6 +160,10 @@ export async function fakeBackend(
         return ok(data);
       }
       case 'setTransferStatuses': {
+        const stale = staleSettlement(request.settlementId, request.seen);
+        if (stale) {
+          return stale;
+        }
         const settlement = data.settlements.find((s) => s.id === request.settlementId);
         if (!settlement) {
           return fail(`Settlement #${request.settlementId} isn't in the sheet anymore.`);
@@ -158,6 +182,10 @@ export async function fakeBackend(
         return ok(data);
       }
       case 'cancelSettlement': {
+        const stale = staleSettlement(request.settlementId, request.seen);
+        if (stale) {
+          return stale;
+        }
         data = {
           ...data,
           settlements: data.settlements.map((s) =>

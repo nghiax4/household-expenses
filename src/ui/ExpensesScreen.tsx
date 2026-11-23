@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
-import { lockingSettlement } from '../domain/settlement';
+import { coveringSettlement, settlementState } from '../domain/settlement';
 import { localDate } from './dates';
 import { ExpenseCard } from './ExpenseCard';
 import { ExpenseForm } from './ExpenseForm';
@@ -71,7 +71,7 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
               expense={expense}
               people={data.people}
               today={today}
-              lockedBy={lockingSettlement(data.settlements, expense.id)?.id ?? null}
+              lock={cardLock(data, expense.id)}
               onMarkWhoPaid={() => setMarking(expense)}
               onEdit={() => setForm({ editing: expense })}
             />
@@ -92,5 +92,15 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
         />
       )}
     </div>
+  );
+}
+
+function cardLock(data: SheetData, expenseId: number) {
+  const settlement = coveringSettlement(data.settlements, expenseId);
+  return (
+    settlement && {
+      settlementId: settlement.id,
+      paidOff: settlementState(settlement) === 'closed',
+    }
   );
 }

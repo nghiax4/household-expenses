@@ -4,7 +4,7 @@ import { sum, type Cents, type PersonName } from './money';
 import { parsePersonCell, type PersonCell } from './personCell';
 import {
   collectUnpaidDebts,
-  lockingSettlement,
+  coveringSettlement,
   minimizeTransfers,
   netBalances,
   paidOffExpenses,
@@ -261,14 +261,18 @@ describe('settlement state and locks', () => {
     expect(settlementState(settlement(1, { cancelledAt: '2026-11-20 10:00' }))).toBe('cancelled');
   });
 
-  it('locks expenses up to #N only while the settlement is pending', () => {
-    const closed = settlement(1, { lines: ALL_PAID });
-    const cancelled = settlement(2, { cancelledAt: '2026-11-21 10:00' });
+  it('finds the settlement that took in an expense: pending or closed, never cancelled', () => {
+    const closed = settlement(1, { lines: ALL_PAID }); // covers up to #5
+    const cancelled = settlement(2, { coversUpToId: 7, cancelledAt: '2026-11-21 10:00' });
     const pending = settlement(3, { coversUpToId: 8 });
     expect(pendingSettlement([closed, cancelled])).toBeNull();
-    expect(lockingSettlement([closed, cancelled], 1)).toBeNull();
-    expect(lockingSettlement([closed, cancelled, pending], 8)?.id).toBe(3);
-    expect(lockingSettlement([closed, cancelled, pending], 9)).toBeNull();
+    // A closed settlement keeps its expenses, even though a later one also reaches them.
+    expect(coveringSettlement([closed, cancelled, pending], 1)?.id).toBe(1);
+    expect(coveringSettlement([closed, cancelled, pending], 5)?.id).toBe(1);
+    // #6 and #7 were only in the cancelled one, so the pending one has them.
+    expect(coveringSettlement([closed, cancelled, pending], 7)?.id).toBe(3);
+    expect(coveringSettlement([closed, cancelled], 7)).toBeNull();
+    expect(coveringSettlement([closed, cancelled, pending], 9)).toBeNull();
   });
 });
 

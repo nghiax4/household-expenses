@@ -12,21 +12,30 @@ export type ApiRequest = { passcode: string } & (
   | { action: 'checkPasscode' }
   | { action: 'listExpenses' }
   | { action: 'addExpense'; expense: NewExpense }
+  // `seen` in the requests below is the expense or settlement as the phone showed it. If the
+  // sheet now holds anything different (another phone changed it), the save is refused, so a
+  // phone showing old data can't undo or misapply a newer change.
   // The whole expense as the form now has it; who had already paid back is kept.
-  | { action: 'editExpense'; expenseId: number; expense: NewExpense }
-  | { action: 'deleteExpense'; expenseId: number }
-  // The new statuses rather than "toggle", so a phone showing an old list can't flip one back.
+  | { action: 'editExpense'; expenseId: number; seen: Expense; expense: NewExpense }
+  | { action: 'deleteExpense'; expenseId: number; seen: Expense }
+  // The new statuses rather than "toggle", so a retried save changes nothing.
   | {
       action: 'setShareStatuses';
       expenseId: number;
+      seen: Expense;
       statuses: Record<PersonName, ShareStatus>;
     }
   // What the preview showed. Refused if the sheet would now give something else (another phone
   // saved in between), so nobody creates a settlement they didn't see.
   | { action: 'createSettlement'; coversUpToId: number; transfers: Transfer[] }
   // New statuses, like setShareStatuses. Ticking the last line closes the settlement.
-  | { action: 'setTransferStatuses'; settlementId: number; statuses: TransferStatus[] }
-  | { action: 'cancelSettlement'; settlementId: number }
+  | {
+      action: 'setTransferStatuses';
+      settlementId: number;
+      seen: Settlement;
+      statuses: TransferStatus[];
+    }
+  | { action: 'cancelSettlement'; settlementId: number; seen: Settlement }
 );
 
 export type ApiAction = ApiRequest['action'];

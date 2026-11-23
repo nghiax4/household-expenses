@@ -229,12 +229,16 @@ test('marks who paid from a checklist, saving only on Save', async ({ page }) =>
     '✓ Chi $10.00, paid',
     '✓ Dương $10.00, paid',
   ]);
-  expect(requests.at(-1)).toEqual({
+  // Only the changed shares, plus the expense as this phone showed it.
+  expect(requests.at(-1)).toMatchObject({
     passcode: PASSCODE,
     action: 'setShareStatuses',
     expenseId: 2,
+    seen: { id: 2, description: 'Internet' },
     statuses: { Chi: 'Paid', Dương: 'Paid' },
   });
+  // toMatchObject allows extra keys, so check the statuses exactly.
+  expect(requests.at(-1)).toHaveProperty('statuses', { Chi: 'Paid', Dương: 'Paid' });
 
   // And back, for a mistaken tick.
   await internet.getByRole('button', { name: 'Mark who paid' }).click();
@@ -314,8 +318,9 @@ test('a slow save shows a seconds counter, and gives up after a minute', async (
   await expect(saving).toHaveText('Saving… 5s');
 
   await page.clock.runFor(55_000);
-  await expect(dialog.getByRole('alert')).toHaveText(
-    'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.',
+  await expect(dialog.getByRole('alert')).toContainText(
+    'The server didn’t answer within a minute. It may still have saved: tap Show the latest to ' +
+      'check before trying again.',
   );
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
 });

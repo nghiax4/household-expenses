@@ -3,6 +3,7 @@ import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import type { Settlement, SettlementLine, TransferStatus } from '../domain/settlement';
 import { Dialog } from './Dialog';
+import { SaveFailed } from './SaveFailed';
 import { TransferLine } from './TransferLine';
 import { Waiting } from './Waiting';
 
@@ -59,6 +60,7 @@ export function TransfersDialog({
       passcode,
       action: 'setTransferStatuses',
       settlementId: settlement.id,
+      seen: settlement,
       statuses: changes,
     });
     setSaving(false);
@@ -102,13 +104,16 @@ export function TransfersDialog({
       {closes && (
         <p className="rounded-lg bg-green-50 p-3 text-sm text-green-900">
           Every transfer is ticked, so saving closes the settlement: every share it covers is marked
-          paid back, and its expenses can be changed again.
+          paid back. This is final: the settlement and its expenses can’t be changed after that.
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-red-700">
-          {error}
-        </p>
+        <SaveFailed
+          error={error}
+          passcode={passcode}
+          onLatest={onSaved}
+          onPasscodeRejected={onPasscodeRejected}
+        />
       )}
       <div className="flex gap-3">
         <button

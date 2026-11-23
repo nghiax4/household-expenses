@@ -8,6 +8,7 @@ import { isEqualSplit, sharesFromTyped, type TypedSplit } from '../domain/split'
 import type { Template } from '../domain/template';
 import { localDate } from './dates';
 import { Choice } from './Choice';
+import { SaveFailed } from './SaveFailed';
 import { SplitPicker } from './SplitPicker';
 import { Waiting } from './Waiting';
 
@@ -43,7 +44,10 @@ export function ExpenseForm({
   const [participants, setParticipants] = useState(initial.participants);
   const [typed, setTyped] = useState(initial.typed);
   const [note, setNote] = useState(initial.note);
+  // A problem with what's typed, found before sending.
   const [error, setError] = useState<string | null>(null);
+  // Why the backend (or the network) refused the save.
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Which request is running, so only its button shows the spinner.
   const [busy, setBusy] = useState<'saving' | 'deleting' | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -113,6 +117,7 @@ export function ExpenseForm({
       return;
     }
     setError(null);
+    setSaveError(null);
     setBusy('saving');
     finish(
       editing
@@ -120,6 +125,7 @@ export function ExpenseForm({
             passcode,
             action: 'editExpense',
             expenseId: editing.id,
+            seen: editing,
             expense: expense.value,
           })
         : await callBackend({ passcode, action: 'addExpense', expense: expense.value }),
@@ -128,8 +134,16 @@ export function ExpenseForm({
 
   async function handleDelete(expense: Expense) {
     setError(null);
+    setSaveError(null);
     setBusy('deleting');
-    finish(await callBackend({ passcode, action: 'deleteExpense', expenseId: expense.id }));
+    finish(
+      await callBackend({
+        passcode,
+        action: 'deleteExpense',
+        expenseId: expense.id,
+        seen: expense,
+      }),
+    );
   }
 
   function finish(result: Result<SheetData>) {
@@ -139,7 +153,7 @@ export function ExpenseForm({
     } else if (result.error === WRONG_PASSCODE) {
       onPasscodeRejected();
     } else {
-      setError(result.error);
+      setSaveError(result.error);
     }
   }
 
@@ -289,10 +303,19 @@ export function ExpenseForm({
         />
       </div>
 
-      {/* Always takes up its line, so the buttons never shift when an error appears. */}
-      <p role="alert" className="min-h-5 text-sm text-red-700">
-        {error}
-      </p>
+      {saveError ? (
+        <SaveFailed
+          error={saveError}
+          passcode={passcode}
+          onLatest={onSaved}
+          onPasscodeRejected={onPasscodeRejected}
+        />
+      ) : (
+        // Always takes up its line, so the buttons never shift when an error appears.
+        <p role="alert" className="min-h-5 text-sm text-red-700">
+          {error}
+        </p>
+      )}
       <div className="flex gap-3">
         <button
           type="button"
