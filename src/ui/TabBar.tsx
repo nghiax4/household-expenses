@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type Tab = 'expenses' | 'settle';
+export type Tab = 'expenses' | 'settle' | 'notes';
 
 interface Props {
   current: Tab;
@@ -25,6 +25,10 @@ export function TabBar({ current, onChange }: Props) {
         <TabButton tab="settle" label="Settle up" current={current} onChange={onChange}>
           {/* Two arrows, back and forth */}
           <path d="M7 4 3 8l4 4M3 8h18M17 20l4-4-4-4M21 16H3" />
+        </TabButton>
+        <TabButton tab="notes" label="Notes" current={current} onChange={onChange}>
+          {/* A pencil */}
+          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </TabButton>
       </div>
     </nav>

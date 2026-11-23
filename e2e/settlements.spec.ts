@@ -22,6 +22,8 @@ const START: SheetData = {
   templates: [],
   templateProblems: [],
   settlements: [],
+  notes: [],
+  noteProblems: [],
   expenses: [
     {
       id: 1,

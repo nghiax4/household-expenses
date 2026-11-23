@@ -68,13 +68,13 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - **Using one:** a **Quick fill** row of buttons at the top of the Add form. Tapping one fills the description (the template's name), payer, people (equal split) and the default amount; with no default (rent, electricity) the Total box is left empty. The keypad doesn't open on its own (it did at first; the user found it annoying). Everything stays editable, including switching to Amounts or Percent, before Save.
 - Starting set (added 2026-11-22, English names): Rent, Internet, Electricity, Insurance, all for the 4 roommates (payers and amounts in private notes; rent has no default).
 
-## Ideas (notes on undecided changes to the app)
-- A simple inbox for ideas about the app itself, e.g., "need a way to split tips" or "not sure templates are still useful". The point is to write a thought down on the phone right away, then discuss it later with Claude Code on the laptop and change the app.
-- **Anyone** can add a note: one free-text box plus an Add button. The app fills in the time automatically.
-- Each note has a **Status**: Open (new), Done (acted on) or Dropped (decided against), plus an optional one-line **Outcome** (e.g., "Added in the Feb update" or "Not needed: use templates"). Anyone can edit a note's text, status and outcome. There's no delete: Dropped plays that role and keeps the history.
-- The list shows Open notes first (newest first), then Done and Dropped.
-- Ideas don't touch money, so they're not written to the Activity log. The row itself records when the note was added.
-- **Claude Code pickup:** at the start of each session, Claude reads the Ideas tab through the Google Drive connector and lists the Open notes. After a note is discussed, the user (or Claude in Chrome, if asked) sets its Status and Outcome.
+## Notes (built 2026-11-23; stored in the Ideas tab)
+- A place to jot down, on the spot, a case the app didn't handle (e.g., "rent was split 5 ways this month because a guest stayed"), to talk through with Claude Code later and change the app. The user asked for the minimum: something to type into (2026-11-23).
+- A **Notes** tab in the bottom bar: a text box (line breaks kept) and **Add note**. Anyone can add one; the app fills in the time and saves it as Open. A half-typed note survives switching tabs.
+- Below, the **Open notes, newest first**, each with its date and a **Done** button that sets its Status to Done (it disappears from the list; the row stays in the sheet). Done and Dropped notes aren't shown. There's no editing or deleting in the app.
+- Notes don't touch money, so they're not written to the Activity log and need no out-of-date check: adding never clashes, and Done on a note that's already closed changes nothing.
+- Unreadable Ideas rows are skipped and listed on the Notes screen (like Templates), never failing the app.
+- **Claude Code pickup:** at the start of each session, Claude reads the Ideas tab through the Google Drive connector and lists the Open notes. Afterwards the user taps Done, or Claude sets Status (Done or Dropped) and Outcome in Chrome if asked.
 
 ## Settlements ("Get total settlement") (built 2026-11-22)
 1. Anyone taps **Get total settlement** on the **Settle up** screen. The app reads the sheet fresh and shows a **preview** first (the transfers, "the 9 unpaid shares on 4 expenses", and that those expenses get locked); nothing is saved until **Create** (user's choice, 2026-11-22). The backend recomputes and refuses if the result no longer matches the preview (another phone saved in between), so what's saved is what was shown. It also refuses while any Expenses row is unreadable (the settlement could miss what it owes), while another settlement is pending, or when nothing is unpaid ("Nothing to settle").
@@ -91,15 +91,15 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Known limitation (MVP): partial repayment of a single share isn't tracked. Leftover debt rolls into the next settlement.
 
 ## Views
-- **Navigation** (built 2026-11-22, user's choice): a **bottom tab bar** fixed at the bottom of the screen, like most iPhone apps (Expenses, Settle up; Activity, What I owe and Ideas will join it, five at most). Switching tabs keeps each screen's state, so a half-typed expense survives a look at Settle up. Dialogs cover the bar.
+- **Navigation** (built 2026-11-22, user's choice): a **bottom tab bar** fixed at the bottom of the screen, like most iPhone apps (Expenses, Settle up, Notes; Activity and What I owe will join it, five at most). Switching tabs keeps each screen's state, so a half-typed expense survives a look at Settle up. Dialogs cover the bar.
 - **Expense list** (newest first) with **search and filters**: by person, payer, date range, keyword.
 - **"What I owe / am owed" view**: pick a person from a list on that screen to see their unpaid shares and running totals.
 - **Settle up** (built 2026-11-22): Get total settlement, or the pending settlement with its transfers, plus history. See "Settlements".
 - **Activity log**: what changed and when, e.g., `Edited "Grocery delivery": $44.27 → $42.27`. It doesn't say who.
-- **Ideas**: add a note, and see or update the list (see "Ideas" above).
+- **Notes** (built 2026-11-23): jot down a case the app didn't handle; see "Notes" above.
 
 ## Safety
-- **Activity log** of every create, edit, delete, status change and settlement action on expenses, templates and people. Ideas are the exception (see "Ideas").
+- **Activity log** of every create, edit, delete, status change and settlement action on expenses, templates and people. Notes are the exception (see "Notes").
 - **Delete without a trash screen** (decided 2026-11-22: "we'll never need it"). A delete only fills in the row's "Deleted at" cell; the row stays in the sheet, hidden from the app. Expense IDs are never reused (settlements rely on that), and a mistaken delete can be undone by hand by clearing that cell (Claude, when asked). The Activity entry lists every cell, so the row could even be rebuilt from the log.
 
 ## Data migration

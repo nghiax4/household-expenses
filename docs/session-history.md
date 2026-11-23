@@ -2,6 +2,14 @@
 
 Older session log entries moved here from `progress.md`, which keeps only the 5 most recent. Newest first.
 
+### 2026-11-20 (keyboard try-out)
+- Session start: still no notes in the Ideas tab.
+- **Removed the empty "Who" columns** from the real storage sheet in Claude in Chrome (Activity B, Ideas C), after making a backup copy (name and ID in private notes; can be trashed once the user is happy). Read back with the Drive connector: Activity is Time, Action, Details; Ideas is ID, Created at, Note, Status, Outcome. The Status dropdown moved to D2:D1000 as expected (checked in the Data validation panel).
+- Built a Telex engine and an iPhone-style letter keyboard on a hidden test page, with unit and e2e tests. The user tried it on their iPhone through the dev server on the local network (`dev-lan` in `.claude/launch.json`, opened at the laptop's Wi-Fi address), then a real text box for comparison, and **chose the iPhone keyboard** ("imperfect here and there"; the earlier slowness was likely Safari's page zoom at 50%). Per the user, all of that code was **deleted without committing**. The smoke test no longer forbids text boxes.
+- Decided: Today / Yesterday buttons plus the iPhone date picker for dates. Updated `docs/requirements.md` → "Input" and `docs/decisions.md`.
+- Numbers use the iPhone keypad too (user's choice): the passcode screen is now a text box with `inputmode="numeric"` (digits only, shown as dots), and the app's number pad (`src/ui/input/`) was deleted (it stays in git history). Amounts will use `inputmode="decimal"` and be checked on save. The user tried the new passcode box on their iPhone (dev server over Wi-Fi) and said it works fine.
+- Committed and pushed at the start of the 2026-11-21 session.
+
 ### 2026-11-17 (second session)
 - The user reviewed the sample sheet again and asked for an explicit **"Not involved"** state in Expenses (decided: plain "Not involved" text, never blank, gray text with no fill).
 - Updated the sample in Chrome: filled every non-participant cell with "Not involved", added the gray formatting rule, and made the validation case-sensitive (`EXACT`). Sheets never validates empty cells, so a separate yellow highlight now flags a blank cell on an expense row.

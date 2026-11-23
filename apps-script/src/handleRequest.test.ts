@@ -190,6 +190,8 @@ describe('handleRequest: passcode and request shape', () => {
         statuses: [{ from: 'Anh', to: 'Bảo', status: 'paid' }],
       }),
     ],
+    ['addNote without text', body({ passcode: PASSCODE, action: 'addNote' })],
+    ['closeNote with a text ID', body({ passcode: PASSCODE, action: 'closeNote', noteId: '1' })],
     [
       'cancelSettlement with a text ID',
       body({ passcode: PASSCODE, action: 'cancelSettlement', settlementId: '1' }),
@@ -228,6 +230,8 @@ describe('handleRequest: expenses', () => {
         templates: [],
         templateProblems: [],
         settlements: [],
+        notes: [],
+        noteProblems: [],
       },
     });
   });
@@ -946,5 +950,49 @@ describe('handleRequest: settlements', () => {
       expect(send(b, { action: 'cancelSettlement', ...stale })).toEqual(changedSettlement);
       expect(storage.tabs).toEqual(afterOtherPhone);
     });
+  });
+});
+
+describe('handleRequest: notes', () => {
+  const send = (b: Backend, request: Record<string, unknown>) =>
+    handleRequest(body({ passcode: PASSCODE, ...request }), b) as ApiResponse<'listExpenses'>;
+
+  it('adds a note as Open, trimmed, without an Activity entry', () => {
+    const storage = fakeStorage(['Anh', 'Bảo']);
+    const result = send(backend(storage), { action: 'addNote', text: '  Paid rent in cash\n ' });
+    expect(storage.tabs.Ideas.slice(1)).toEqual([
+      ['1', '2026-11-21 14:05', 'Paid rent in cash', 'Open', ''],
+    ]);
+    expect(result.ok && result.value.notes).toEqual([
+      { id: 1, createdAt: '2026-11-21 14:05', text: 'Paid rent in cash', status: 'Open' },
+    ]);
+    expect(storage.tabs.Activity).toHaveLength(1);
+  });
+
+  it('refuses an empty note, writing nothing', () => {
+    const storage = fakeStorage(['Anh', 'Bảo']);
+    expect(send(backend(storage), { action: 'addNote', text: ' \n ' })).toEqual({
+      ok: false,
+      error: 'Write something first.',
+    });
+    expect(storage.tabs.Ideas).toHaveLength(1);
+  });
+
+  it('marks a note Done, leaves a closed one alone, and refuses a missing one', () => {
+    const storage = fakeStorage(['Anh', 'Bảo']);
+    storage.tabs.Ideas.push(['1', '2026-11-20 09:00', 'First', 'Open', '']);
+    storage.tabs.Ideas.push(['2', '2026-11-20 09:00', 'Second', 'Dropped', 'Not needed']);
+    const b = backend(storage);
+    send(b, { action: 'closeNote', noteId: 1 });
+    send(b, { action: 'closeNote', noteId: 2 });
+    expect(storage.tabs.Ideas.slice(1).map((row) => row[3])).toEqual(['Done', 'Dropped']);
+    expect(send(b, { action: 'closeNote', noteId: 1 }).ok).toBe(true);
+    expect(send(b, { action: 'closeNote', noteId: 7 })).toEqual({
+      ok: false,
+      error: "Note #7 isn't in the sheet anymore.",
+    });
+    // A new note never reuses an ID.
+    send(b, { action: 'addNote', text: 'Third' });
+    expect(storage.tabs.Ideas.at(-1)?.[0]).toBe('3');
   });
 });

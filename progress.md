@@ -26,7 +26,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
 4. ~~Delete the two empty "Who" columns~~ (done 2026-11-20). The backup copy can be trashed once the user is happy (ask first).
-5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23. Next, Claude's recommendation: import sheet2 (step 6) so the household can switch over, then "what I owe" → activity log → search/filter → Ideas screen. Every write needs an Activity entry (the lock already covers every request).
+5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. Next, Claude's recommendation: import sheet2 (step 6) so the household can switch over, then "what I owe" → activity log → search/filter. Every write needs an Activity entry (the lock already covers every request).
 6. Import sheet2 (copy the storage sheet first; ask about rows with no date).
 
 ## Open questions
@@ -35,6 +35,13 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
 
+### 2026-11-23, later (Notes tab)
+- The user chose to build the jotting-down feature before the sheet2 import. It's not for "ideas" but for cases the app didn't handle, to discuss with Claude; the user wanted the minimum ("something typeable").
+- Built a **Notes** tab (third in the bottom bar): a text box + Add note, the Open notes newest first, each with Done. Stored in the existing Ideas tab (new backend actions `addNote` and `closeNote`; `apps-script/src/notesTab.ts`). No Activity entries, no out-of-date check (adding never clashes; Done is idempotent).
+- Checks: 263 unit and 52 e2e tests pass; iPhone screenshot checked.
+- Shipped: backend first (version 9; a live `listExpenses` returns `notes: []`), then the site (the new site expects `notes` in the data; the old site ignores it).
+- Not done: the user's iPhone try-out of the Notes tab.
+
 ### 2026-11-23 (settlements live; closing made final)
 - Went live: "Cancelled at" header added to the real sheet, backend redeployed, site pushed (`6901b73`), Claude in Chrome check of the live preview.
 - The user tried it on the iPhone and found a hole: after settlement #2 closed, Mark who paid could set a settled share back to Not paid, so the sheet contradicted itself and the next settlement would charge it again.
@@ -42,7 +49,8 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - User feedback: replies were too long; explain designs as app behavior, not code.
 - Audit for nonsensical states (4 subagents: settlements, concurrency, single expense, sheet hand edits). Root causes found: (1) a Paid share survives edits that change its amount, payer or people, and deletes drop paid money → proposed: no edit/delete while anyone has paid back; (2) stale phones overwrite newer changes (edit, Mark who paid, a tick that closes a settlement without the warning) and refused saves leave the screen stale → **built** (the only one the user wanted fixed): each change carries what the phone saw (`seen`), refused if the expense or settlement changed at all; a failed save shows **Show the latest** (the user asked for a tap rather than an automatic refresh, so the screen doesn't change before they read why); the cancel-confirm box got its React key; (3) hand edits can reuse an expense ID inside a settlement's range or close a settlement without paying its shares → proposed: new IDs always above every settlement's range, and an unpaid share inside a closed settlement is flagged as a sheet problem; (4) small: cancel-confirm box can carry over to a new settlement (no React key), payer's share Not paid by hand isn't flagged. The user accepted the rest as fine for the app's simplicity; they'll jot weird cases in the Ideas tab and bring them to Claude. Also left: duplicate add after a 60 s timeout (Show the latest now lets them check), sheet locale, date range, "1,2,3" amount parsing.
 - Shipped both (site `0fcb20f`, then backend version 8). Live checks with direct calls that write nothing: a wrong `seen` is refused ("changed on another device"), and the right one on test expense #1 gets "paid off in settlement #2". A first check looked like a backend bug, so the backend was rolled back to version 7 for a few minutes; the real cause was the test itself (Python on Windows mangled the Vietnamese names; fixed with `PYTHONUTF8=1`, now noted in CLAUDE.md). Right after a redeploy, Google can serve the old version for up to a minute.
-- Not done: the user's iPhone try-out of both; clearing the test rows before the import.
+- The user tried the two-device Mark who paid test on the live app (iPhone + laptop): it works. The stale Edit case wasn't tried by hand (covered by a backend unit test only).
+- Not done: clearing the test rows before the import.
 
 ### 2026-11-22, later (settlements)
 - Session start: no notes in the Ideas tab. Real sheet: only test expense #1 ($2.02, not deleted); Settlements empty.
@@ -74,12 +82,3 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - Tests: 147 unit, 14 e2e (desktop Chrome + iPhone WebKit) all pass; e2e now fail on any page error and check the add form fits the iPhone width (a date-box overflow was found and fixed this way). iPhone and desktop screenshots checked with made-up data. Claude in Chrome wasn't connected, so the desktop check used Playwright's Chrome.
 - Backend redeployed (same URL). Live check from the terminal: right passcode works, wrong one is refused, `listExpenses` reads the real (empty) sheet with all 7 people.
 - Committed and pushed on 2026-11-22, after the user tried adding against the real sheet.
-
-### 2026-11-20 (keyboard try-out)
-- Session start: still no notes in the Ideas tab.
-- **Removed the empty "Who" columns** from the real storage sheet in Claude in Chrome (Activity B, Ideas C), after making a backup copy (name and ID in private notes; can be trashed once the user is happy). Read back with the Drive connector: Activity is Time, Action, Details; Ideas is ID, Created at, Note, Status, Outcome. The Status dropdown moved to D2:D1000 as expected (checked in the Data validation panel).
-- Built a Telex engine and an iPhone-style letter keyboard on a hidden test page, with unit and e2e tests. The user tried it on their iPhone through the dev server on the local network (`dev-lan` in `.claude/launch.json`, opened at the laptop's Wi-Fi address), then a real text box for comparison, and **chose the iPhone keyboard** ("imperfect here and there"; the earlier slowness was likely Safari's page zoom at 50%). Per the user, all of that code was **deleted without committing**. The smoke test no longer forbids text boxes.
-- Decided: Today / Yesterday buttons plus the iPhone date picker for dates. Updated `docs/requirements.md` → "Input" and `docs/decisions.md`.
-- Numbers use the iPhone keypad too (user's choice): the passcode screen is now a text box with `inputmode="numeric"` (digits only, shown as dots), and the app's number pad (`src/ui/input/`) was deleted (it stays in git history). Amounts will use `inputmode="decimal"` and be checked on save. The user tried the new passcode box on their iPhone (dev server over Wi-Fi) and said it works fine.
-- Committed and pushed at the start of the 2026-11-21 session.
-

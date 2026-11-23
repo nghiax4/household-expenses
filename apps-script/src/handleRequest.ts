@@ -34,6 +34,7 @@ import {
   readExpensesTab,
   shareStatusActivity,
 } from './expensesTab';
+import { NOTE_COLUMNS, nextNoteId, noteRow, noteRowNumber, readNotesTab } from './notesTab';
 import { parseRequest } from './parseRequest';
 import type { TabName } from './schema';
 import {
@@ -104,6 +105,10 @@ export function handleRequest(rawBody: string, backend: Backend): Result<unknown
       return setTransferStatuses(request, backend);
     case 'cancelSettlement':
       return cancelSettlement(request, backend);
+    case 'addNote':
+      return addNote(request, backend);
+    case 'closeNote':
+      return closeNote(request, backend);
   }
 }
 
@@ -448,6 +453,30 @@ function payOff(
  * Everything the app shows, read fresh. Writes end with this too, so the app shows exactly
  * what's stored rather than what it asked for.
  */
+/** Jots down a note, to bring to Claude later. Notes don't touch money, so nothing is logged. */
+function addNote({ text }: RequestFor<'addNote'>, { storage, now }: Backend): Result<SheetData> {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return fail('Write something first.');
+  }
+  const id = nextNoteId(storage.readTab('Ideas'));
+  storage.appendRow('Ideas', noteRow({ id, createdAt: now(), text: trimmed, status: 'Open' }));
+  return readSheet(storage);
+}
+
+/** Marks a note Done. One that's already Done or Dropped is left as it is. */
+function closeNote({ noteId }: RequestFor<'closeNote'>, { storage }: Backend): Result<SheetData> {
+  const rows = storage.readTab('Ideas');
+  const rowNumber = noteRowNumber(rows, noteId);
+  if (!rowNumber.ok) {
+    return fail(rowNumber.error);
+  }
+  if (rows[rowNumber.value - 1]?.[NOTE_COLUMNS.status - 1] === 'Open') {
+    storage.setCell('Ideas', rowNumber.value, NOTE_COLUMNS.status, literal('Done'));
+  }
+  return readSheet(storage);
+}
+
 function readSheet(storage: SheetStorage): Result<SheetData> {
   const expenses = readExpensesTab(storage.readTab('Expenses'));
   if (!expenses.ok) {
@@ -459,11 +488,14 @@ function readSheet(storage: SheetStorage): Result<SheetData> {
     return fail(settlements.error);
   }
   const { templates, problems } = readTemplatesTab(storage.readTab('Templates'), people);
+  const notes = readNotesTab(storage.readTab('Ideas'));
   return ok({
     ...expenses.value,
     templates,
     templateProblems: problems,
     settlements: settlements.value,
+    notes: notes.notes,
+    noteProblems: notes.problems,
   });
 }
 

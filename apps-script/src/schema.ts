@@ -1,5 +1,6 @@
 // The storage sheet's layout ("layout 1" in docs/requirements.md). Pure data and functions,
 // so the rules can be unit-tested without Google services.
+import { NOTE_STATUSES } from '../../src/domain/note';
 import { NOT_INVOLVED_TEXT } from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
 
@@ -28,7 +29,8 @@ export const FIRST_PERSON_COLUMN = TAB_HEADERS.Expenses.length + 1;
 /** Formatting and validation cover columns H to Z, room for 19 people. */
 export const PERSON_RANGE_A1 = 'H2:Z1000';
 
-export const IDEA_STATUSES = ['Open', 'Done', 'Dropped'] as const;
+/** The Status dropdown in the Ideas tab, where notes are kept. */
+export const IDEA_STATUSES = NOTE_STATUSES;
 
 /**
  * Sheet formulas for the person cells, relative to H2. Kept in sync with

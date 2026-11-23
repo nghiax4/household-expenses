@@ -71,6 +71,14 @@ export function parseRequest(rawBody: string): ApiRequest | null {
         ? { passcode, action, settlementId, seen }
         : null;
     }
+    case 'addNote': {
+      const { text } = body;
+      return typeof text === 'string' ? { passcode, action, text } : null;
+    }
+    case 'closeNote': {
+      const { noteId } = body;
+      return isId(noteId) ? { passcode, action, noteId } : null;
+    }
     default:
       return null;
   }

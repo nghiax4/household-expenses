@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { callBackend } from '../api/client';
 import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
 import { ExpensesScreen } from './ExpensesScreen';
+import { NotesScreen } from './NotesScreen';
 import { SettleScreen } from './SettleScreen';
 import { TabBar, type Tab } from './TabBar';
 import { Waiting } from './Waiting';
@@ -74,12 +75,15 @@ export function UnlockedApp({ passcode, onPasscodeRejected }: Props) {
   const shared = { data: loading.data, passcode, onData: setData, onPasscodeRejected };
   return (
     <>
-      {/* Both stay mounted, so a half-typed expense survives a look at the other screen. */}
+      {/* All stay mounted, so a half-typed expense or note survives a look at another screen. */}
       <div hidden={tab !== 'expenses'}>
         <ExpensesScreen {...shared} />
       </div>
       <div hidden={tab !== 'settle'}>
         <SettleScreen {...shared} />
+      </div>
+      <div hidden={tab !== 'notes'}>
+        <NotesScreen {...shared} />
       </div>
       <TabBar
         current={tab}

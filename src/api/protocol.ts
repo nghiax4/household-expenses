@@ -2,6 +2,7 @@
 // sides, so they can't disagree.
 import type { Expense, NewExpense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
+import type { Note } from '../domain/note';
 import type { ShareStatus } from '../domain/personCell';
 import type { Result } from '../domain/result';
 import type { Settlement, Transfer, TransferStatus } from '../domain/settlement';
@@ -36,6 +37,10 @@ export type ApiRequest = { passcode: string } & (
       statuses: TransferStatus[];
     }
   | { action: 'cancelSettlement'; settlementId: number; seen: Settlement }
+  // Notes don't touch money, so they need no `seen`: adding never clashes, and closing a note
+  // that's already closed changes nothing.
+  | { action: 'addNote'; text: string }
+  | { action: 'closeNote'; noteId: number }
 );
 
 export type ApiAction = ApiRequest['action'];
@@ -57,6 +62,10 @@ export interface SheetData {
   templateProblems: string[];
   /** Every settlement, oldest first: at most one pending, then closed and cancelled ones. */
   settlements: Settlement[];
+  /** Every note in the Ideas tab: cases that came up, jotted down to bring to Claude. */
+  notes: Note[];
+  /** Ideas rows that couldn't be read, explained the same way. */
+  noteProblems: string[];
 }
 
 /** What each action returns when it succeeds. */
@@ -72,6 +81,8 @@ export interface ApiResults {
   createSettlement: SheetData;
   setTransferStatuses: SheetData;
   cancelSettlement: SheetData;
+  addNote: SheetData;
+  closeNote: SheetData;
 }
 
 export type ApiResponse<A extends ApiAction> = Result<ApiResults[A]>;

@@ -38,6 +38,8 @@ export async function fakeBackend(
     templates: [],
     templateProblems: [],
     settlements: [],
+    notes: [],
+    noteProblems: [],
   },
 ): Promise<ApiRequest[]> {
   let data = start;
@@ -190,6 +192,24 @@ export async function fakeBackend(
           ...data,
           settlements: data.settlements.map((s) =>
             s.id === request.settlementId ? { ...s, cancelledAt: NOW } : s,
+          ),
+        };
+        return ok(data);
+      }
+      case 'addNote': {
+        const text = request.text.trim();
+        if (text === '') {
+          return fail('Write something first.');
+        }
+        const id = Math.max(0, ...data.notes.map((n) => n.id)) + 1;
+        data = { ...data, notes: [...data.notes, { id, createdAt: NOW, text, status: 'Open' }] };
+        return ok(data);
+      }
+      case 'closeNote': {
+        data = {
+          ...data,
+          notes: data.notes.map((n) =>
+            n.id === request.noteId && n.status === 'Open' ? { ...n, status: 'Done' } : n,
           ),
         };
         return ok(data);
