@@ -20,6 +20,7 @@ const START = {
   problems: ['Row 5: the total "10" isn’t an amount like $12.34 above $0.00.'],
   templates: [],
   templateProblems: [],
+  settlements: [],
   expenses: [
     {
       id: 1,

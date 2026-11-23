@@ -14,6 +14,7 @@ export const TAB_HEADERS = {
     'Amount',
     'Paid',
     'Paid at',
+    'Cancelled at',
   ],
   Templates: ['Name', 'Payer', 'Participants', 'Default amount'],
   Activity: ['Time', 'Action', 'Details'],

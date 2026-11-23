@@ -8,6 +8,8 @@ interface Props {
   /** The household in person-column order, so chips always appear in the same order. */
   people: readonly PersonName[];
   today: string;
+  /** The pending settlement that covers this expense, if any: it can't change until that's done. */
+  lockedBy: number | null;
   onMarkWhoPaid: () => void;
   onEdit: () => void;
 }
@@ -15,7 +17,7 @@ interface Props {
 const CARD_BUTTON =
   'h-9 rounded-full border border-slate-400 px-4 text-sm font-medium active:bg-slate-100';
 
-export function ExpenseCard({ expense, people, today, onMarkWhoPaid, onEdit }: Props) {
+export function ExpenseCard({ expense, people, today, lockedBy, onMarkWhoPaid, onEdit }: Props) {
   const sharers = people.filter((person) => expense.people[person]?.kind === 'share');
   return (
     <li className="rounded-xl border border-slate-200 p-3">
@@ -41,17 +43,25 @@ export function ExpenseCard({ expense, people, today, onMarkWhoPaid, onEdit }: P
           );
         })}
       </ul>
-      <div className="mt-3 flex gap-2">
-        {/* Only the payer is in the split: nobody owes anything, so there's nothing to mark. */}
-        {sharers.some((person) => person !== expense.payer) && (
-          <button type="button" onClick={onMarkWhoPaid} className={CARD_BUTTON}>
-            Mark who paid
+      {lockedBy !== null ? (
+        // Changing it now would change amounts the settlement already worked out.
+        <p className="mt-3 text-sm text-slate-600">
+          In settlement #{lockedBy}, so it can’t be changed until every transfer is paid (see Settle
+          up).
+        </p>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          {/* Only the payer is in the split: nobody owes anything, so there's nothing to mark. */}
+          {sharers.some((person) => person !== expense.payer) && (
+            <button type="button" onClick={onMarkWhoPaid} className={CARD_BUTTON}>
+              Mark who paid
+            </button>
+          )}
+          <button type="button" onClick={onEdit} className={CARD_BUTTON}>
+            Edit
           </button>
-        )}
-        <button type="button" onClick={onEdit} className={CARD_BUTTON}>
-          Edit
-        </button>
-      </div>
+        </div>
+      )}
     </li>
   );
 }

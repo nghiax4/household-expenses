@@ -1,77 +1,26 @@
-import { useEffect, useState } from 'react';
-import { callBackend } from '../api/client';
-import { WRONG_PASSCODE, type SheetData } from '../api/protocol';
+import { useState } from 'react';
+import type { SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
+import { lockingSettlement } from '../domain/settlement';
 import { localDate } from './dates';
 import { ExpenseCard } from './ExpenseCard';
 import { ExpenseForm } from './ExpenseForm';
-import { Waiting } from './Waiting';
 import { WhoPaidDialog } from './WhoPaidDialog';
 
 interface Props {
+  data: SheetData;
   passcode: string;
-  /** The saved passcode no longer works (it was changed), so ask for it again. */
+  /** Every save returns the sheet read back; this replaces what the app shows. */
+  onData: (data: SheetData) => void;
   onPasscodeRejected: () => void;
 }
 
-type Loading =
-  { state: 'loading' } | { state: 'failed'; error: string } | { state: 'ready'; data: SheetData };
-
-export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
-  const [loading, setLoading] = useState<Loading>({ state: 'loading' });
-  const [attempt, setAttempt] = useState(0);
+export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: Props) {
   // The form, when it's open: for a new expense, or for editing one.
   const [form, setForm] = useState<{ editing?: Expense } | null>(null);
   // The expense whose "Mark who paid" checklist is open.
   const [marking, setMarking] = useState<Expense | null>(null);
 
-  useEffect(() => {
-    let current = true;
-    void callBackend({ passcode, action: 'listExpenses' }).then((result) => {
-      if (!current) {
-        return;
-      }
-      if (result.ok) {
-        setLoading({ state: 'ready', data: result.value });
-      } else if (result.error === WRONG_PASSCODE) {
-        onPasscodeRejected();
-      } else {
-        setLoading({ state: 'failed', error: result.error });
-      }
-    });
-    return () => {
-      current = false;
-    };
-  }, [passcode, attempt, onPasscodeRejected]);
-
-  if (loading.state === 'loading') {
-    return (
-      <p className="mt-6 text-slate-600">
-        <Waiting label="Loading expenses" />
-      </p>
-    );
-  }
-  if (loading.state === 'failed') {
-    return (
-      <div className="mt-6 flex flex-col gap-3">
-        <p role="alert" className="text-red-700">
-          {loading.error}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setLoading({ state: 'loading' });
-            setAttempt((n) => n + 1);
-          }}
-          className="h-12 rounded-lg border border-slate-300 font-medium"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  const { data } = loading;
   if (form) {
     return (
       <ExpenseForm
@@ -79,7 +28,7 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
         editing={form.editing}
         passcode={passcode}
         onSaved={(saved) => {
-          setLoading({ state: 'ready', data: saved });
+          onData(saved);
           setForm(null);
         }}
         onCancel={() => setForm(null)}
@@ -122,6 +71,7 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
               expense={expense}
               people={data.people}
               today={today}
+              lockedBy={lockingSettlement(data.settlements, expense.id)?.id ?? null}
               onMarkWhoPaid={() => setMarking(expense)}
               onEdit={() => setForm({ editing: expense })}
             />
@@ -134,7 +84,7 @@ export function ExpensesScreen({ passcode, onPasscodeRejected }: Props) {
           people={data.people}
           passcode={passcode}
           onSaved={(saved) => {
-            setLoading({ state: 'ready', data: saved });
+            onData(saved);
             setMarking(null);
           }}
           onCancel={() => setMarking(null)}

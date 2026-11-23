@@ -16,18 +16,13 @@ import {
   type ShareStatus,
 } from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
+import { dollarsCell, literal, type SheetCell } from './cells';
 import { TAB_HEADERS } from './schema';
-
-/** One cell to write, with an optional sheet number format such as "yyyy-mm-dd". */
-export interface SheetCell {
-  value: string | number;
-  numberFormat?: string;
-}
 
 const FIXED_HEADERS: readonly string[] = TAB_HEADERS.Expenses;
 
-/** What the Expenses tab alone gives: everything in SheetData except the templates. */
-export type ExpensesTab = Omit<SheetData, 'templates' | 'templateProblems'>;
+/** What the Expenses tab alone gives. */
+export type ExpensesTab = Pick<SheetData, 'people' | 'expenses' | 'problems'>;
 
 /** Reads the Expenses tab from its displayed cells, header row first. */
 export function readExpensesTab(rows: readonly (readonly string[])[]): Result<ExpensesTab> {
@@ -78,7 +73,7 @@ export function expenseRow(expense: Expense, people: readonly PersonName[]): She
     // Written as a real date so the sheet can sort and filter it, displayed the way it's read.
     { value: expense.date, numberFormat: 'yyyy-mm-dd' },
     literal(expense.description),
-    { value: expense.total / 100, numberFormat: '$#,##0.00' },
+    dollarsCell(expense.total),
     literal(expense.payer),
     literal(expense.note),
     literal(expense.deletedAt ?? ''),
@@ -208,14 +203,6 @@ function summary(expense: Expense): string {
 
 function noteSuffix(expense: Expense): string {
   return expense.note === '' ? '' : ` Note: "${expense.note}"`;
-}
-
-/**
- * Text the sheet stores exactly as given. The leading apostrophe is hidden by Sheets and stops
- * it from turning "1/2" into a date or "=..." into a formula.
- */
-function literal(text: string): SheetCell {
-  return { value: text === '' ? '' : `'${text}` };
 }
 
 function readPeople(header: readonly string[]): Result<PersonName[]> {

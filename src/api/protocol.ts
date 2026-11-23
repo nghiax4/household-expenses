@@ -3,8 +3,9 @@
 import type { Expense, NewExpense } from '../domain/expense';
 import type { PersonName } from '../domain/money';
 import type { ShareStatus } from '../domain/personCell';
-import type { Template } from '../domain/template';
 import type { Result } from '../domain/result';
+import type { Settlement, Transfer, TransferStatus } from '../domain/settlement';
+import type { Template } from '../domain/template';
 
 /** Every request carries the household passcode; the backend rejects it otherwise. */
 export type ApiRequest = { passcode: string } & (
@@ -20,11 +21,17 @@ export type ApiRequest = { passcode: string } & (
       expenseId: number;
       statuses: Record<PersonName, ShareStatus>;
     }
+  // What the preview showed. Refused if the sheet would now give something else (another phone
+  // saved in between), so nobody creates a settlement they didn't see.
+  | { action: 'createSettlement'; coversUpToId: number; transfers: Transfer[] }
+  // New statuses, like setShareStatuses. Ticking the last line closes the settlement.
+  | { action: 'setTransferStatuses'; settlementId: number; statuses: TransferStatus[] }
+  | { action: 'cancelSettlement'; settlementId: number }
 );
 
 export type ApiAction = ApiRequest['action'];
 
-/** Everything the app reads from the storage sheet: the Expenses tab, plus the Templates tab. */
+/** Everything the app reads from the storage sheet: the Expenses, Templates and Settlements tabs. */
 export interface SheetData {
   /** Everyone with a column in Expenses, in column order. */
   people: PersonName[];
@@ -39,6 +46,8 @@ export interface SheetData {
   templates: Template[];
   /** Templates rows that couldn't be read, explained the same way. */
   templateProblems: string[];
+  /** Every settlement, oldest first: at most one pending, then closed and cancelled ones. */
+  settlements: Settlement[];
 }
 
 /** What each action returns when it succeeds. */
@@ -51,6 +60,9 @@ export interface ApiResults {
   setShareStatuses: SheetData;
   editExpense: SheetData;
   deleteExpense: SheetData;
+  createSettlement: SheetData;
+  setTransferStatuses: SheetData;
+  cancelSettlement: SheetData;
 }
 
 export type ApiResponse<A extends ApiAction> = Result<ApiResults[A]>;

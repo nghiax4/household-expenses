@@ -18,13 +18,15 @@ export function ScrollFades({ edges, children }: Props) {
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const moreAbove = useIsOutOfView(top);
-  const moreBelow = useIsOutOfView(bottom);
+  // On a screen, the tab bar (4rem) covers the bottom edge, so the end counts as in view only
+  // once it's above the bar, and the fade sits on top of the bar.
+  const moreBelow = useIsOutOfView(bottom, edges === 'screen' ? '0px 0px -64px 0px' : '0px');
   // A gray shadow rather than a white fade: white on a white page barely shows. Above the
-  // content (z-1), below dialogs (z-10); they never catch taps.
+  // content (z-1), below the tab bar (z-5) and dialogs (z-10); they never catch taps.
   const fade = 'pointer-events-none z-[1] h-12 from-slate-900/25 to-transparent transition-opacity';
   const position =
     edges === 'screen'
-      ? { top: 'fixed inset-x-0 top-0', bottom: 'fixed inset-x-0 bottom-0' }
+      ? { top: 'fixed inset-x-0 top-0', bottom: 'fixed inset-x-0 bottom-16' }
       : // Sticky inside the box; the negative margins keep them from taking up space.
         { top: 'sticky top-0 -mb-12', bottom: 'sticky bottom-0 -mt-12' };
 
@@ -47,19 +49,25 @@ export function ScrollFades({ edges, children }: Props) {
   );
 }
 
-/** True while the element is scrolled out of sight (its scrolling box's edges count). */
-function useIsOutOfView(ref: RefObject<HTMLElement | null>): boolean {
+/**
+ * True while the element is scrolled out of sight (its scrolling box's edges count). `margin`
+ * shrinks the screen's edges, as in CSS ("0px 0px -64px 0px" leaves out the bottom 64px).
+ */
+function useIsOutOfView(ref: RefObject<HTMLElement | null>, margin = '0px'): boolean {
   const [outOfView, setOutOfView] = useState(false);
   useEffect(() => {
     const element = ref.current;
     if (!element) {
       return;
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      setOutOfView(entry ? !entry.isIntersecting : false);
-    });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setOutOfView(entry ? !entry.isIntersecting : false);
+      },
+      { rootMargin: margin },
+    );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [ref, margin]);
   return outOfView;
 }

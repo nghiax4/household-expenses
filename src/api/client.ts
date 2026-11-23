@@ -14,7 +14,8 @@ export const BACKEND_URL =
  */
 export const GIVE_UP_AFTER_MS = 60_000;
 
-const WRITES: ReadonlySet<ApiAction> = new Set(['addExpense', 'setShareStatuses']);
+/** Requests that only read. Every other request changes the sheet. */
+const READS: ReadonlySet<ApiAction> = new Set(['checkPasscode', 'listExpenses']);
 
 /** Sends one request to the backend. Never throws: network trouble comes back as a failure. */
 export async function callBackend<A extends ApiAction>(
@@ -41,9 +42,9 @@ export async function callBackend<A extends ApiAction>(
       // The app stops waiting, but the server may still finish the job, so a blind retry
       // could add the same expense twice.
       return fail(
-        WRITES.has(request.action)
-          ? 'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.'
-          : 'The server didn’t answer within a minute. Try again.',
+        READS.has(request.action)
+          ? 'The server didn’t answer within a minute. Try again.'
+          : 'The server didn’t answer within a minute. It may still have saved, so check the list before trying again.',
       );
     }
     return fail('Couldn’t reach the server. Check your internet connection and try again.');

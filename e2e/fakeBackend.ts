@@ -8,15 +8,24 @@ import {
   type Expense,
 } from '../src/domain/expense';
 import { fail, ok, type Result } from '../src/domain/result';
+import {
+  lockingSettlement,
+  paidOffExpenses,
+  proposeSettlement,
+  sameTransfers,
+  settlementState,
+  withTransferStatuses,
+} from '../src/domain/settlement';
 
 // Made-up people (the repo is public), in person-column order.
 export const PEOPLE = ['Anh', 'Bảo', 'Chi', 'Dương'];
 export const PASSCODE = '2468';
+export const NOW = '2026-11-22 12:00';
 
 /**
- * A stand-in for the real backend, so tests never touch the household's sheet. It keeps
- * expenses in memory and checks changes with the same rules as the real backend. Returns
- * every request it received, newest last.
+ * A stand-in for the real backend, so tests never touch the household's sheet. It keeps the
+ * data in memory and checks changes with the same domain rules as the real backend (the
+ * backend's own unit tests cover the rest). Returns every request it received, newest last.
  */
 export async function fakeBackend(
   page: Page,
@@ -26,6 +35,7 @@ export async function fakeBackend(
     problems: [],
     templates: [],
     templateProblems: [],
+    settlements: [],
   },
 ): Promise<ApiRequest[]> {
   let data = start;
@@ -33,64 +43,139 @@ export async function fakeBackend(
   await page.route(BACKEND_URL, async (route) => {
     const request = route.request().postDataJSON() as ApiRequest;
     requests.push(request);
-    if (request.passcode !== PASSCODE) {
-      await route.fulfill({ json: fail(WRONG_PASSCODE) });
-      return;
-    }
+    const result = request.passcode === PASSCODE ? answer(request) : fail(WRONG_PASSCODE);
+    await route.fulfill({ json: result });
+  });
+  return requests;
+
+  /** Applies the request to `data` and says what the backend would answer. */
+  function answer(request: ApiRequest): Result<unknown> {
+    const replaceExpense = (expense: Expense) => {
+      data = { ...data, expenses: data.expenses.map((e) => (e.id === expense.id ? expense : e)) };
+    };
+    const lockedFor = (expenseId: number): Result<never> | null => {
+      const lock = lockingSettlement(data.settlements, expenseId);
+      return lock && fail(`In settlement #${lock.id}.`);
+    };
+
     switch (request.action) {
       case 'checkPasscode':
-        await route.fulfill({ json: ok({}) });
-        return;
+        return ok({});
       case 'listExpenses':
-        await route.fulfill({ json: ok(data) });
-        return;
+        return ok(data);
       case 'addExpense': {
         const nextId = Math.max(0, ...data.expenses.map((e) => e.id)) + 1;
         const expense = buildExpense(request.expense, nextId, data.people);
-        if (expense.ok) {
-          data = { ...data, expenses: [...data.expenses, expense.value] };
+        if (!expense.ok) {
+          return expense;
         }
-        await route.fulfill({ json: expense.ok ? ok(data) : expense });
-        return;
+        data = { ...data, expenses: [...data.expenses, expense.value] };
+        return ok(data);
       }
       case 'editExpense': {
+        const locked = lockedFor(request.expenseId);
+        if (locked) {
+          return locked;
+        }
         const before = data.expenses.find((e) => e.id === request.expenseId);
         const built = buildExpense(request.expense, request.expenseId, data.people);
-        if (before && built.ok) {
-          const after = carryOverStatuses(before, built.value);
-          data = { ...data, expenses: data.expenses.map((e) => (e.id === after.id ? after : e)) };
+        if (!built.ok) {
+          return built;
         }
-        await route.fulfill({ json: built.ok ? ok(data) : built });
-        return;
+        if (before) {
+          replaceExpense(carryOverStatuses(before, built.value));
+        }
+        return ok(data);
       }
       case 'deleteExpense': {
-        const deletedAt = '2026-11-22 12:00';
-        data = {
-          ...data,
-          expenses: data.expenses.map((e) =>
-            e.id === request.expenseId ? { ...e, deletedAt } : e,
-          ),
-        };
-        await route.fulfill({ json: ok(data) });
-        return;
+        const locked = lockedFor(request.expenseId);
+        if (locked) {
+          return locked;
+        }
+        const expense = data.expenses.find((e) => e.id === request.expenseId);
+        if (expense) {
+          replaceExpense({ ...expense, deletedAt: NOW });
+        }
+        return ok(data);
       }
       case 'setShareStatuses': {
+        const locked = lockedFor(request.expenseId);
+        if (locked) {
+          return locked;
+        }
         const expense = data.expenses.find((e) => e.id === request.expenseId);
-        const updated: Result<Expense> = expense
+        const updated = expense
           ? withShareStatuses(expense, request.statuses)
-          : fail(`Expense #${request.expenseId} isn't in the sheet anymore. Reload the list.`);
-        if (updated.ok) {
+          : fail<Expense>(`Expense #${request.expenseId} isn't in the sheet anymore.`);
+        if (!updated.ok) {
+          return updated;
+        }
+        replaceExpense(updated.value);
+        return ok(data);
+      }
+      case 'createSettlement': {
+        const proposal = proposeSettlement(data.expenses, data.people);
+        if (
+          !proposal ||
+          proposal.coversUpToId !== request.coversUpToId ||
+          !sameTransfers(proposal.transfers, request.transfers)
+        ) {
+          return fail('Something changed since you opened this.');
+        }
+        const lines = proposal.transfers.map((t) => ({
+          ...t,
+          status: 'Not paid' as const,
+          paidAt: null,
+        }));
+        if (lines.length === 0) {
+          payOff(proposal.coversUpToId);
+        } else {
+          const id = Math.max(0, ...data.settlements.map((s) => s.id)) + 1;
+          const settlement = { id, createdAt: NOW, coversUpToId: proposal.coversUpToId, lines };
           data = {
             ...data,
-            expenses: data.expenses.map((e) => (e.id === request.expenseId ? updated.value : e)),
+            settlements: [...data.settlements, { ...settlement, cancelledAt: null }],
           };
         }
-        await route.fulfill({ json: updated.ok ? ok(data) : updated });
-        return;
+        return ok(data);
+      }
+      case 'setTransferStatuses': {
+        const settlement = data.settlements.find((s) => s.id === request.settlementId);
+        if (!settlement) {
+          return fail(`Settlement #${request.settlementId} isn't in the sheet anymore.`);
+        }
+        const updated = withTransferStatuses(settlement, request.statuses, NOW);
+        if (!updated.ok) {
+          return updated;
+        }
+        data = {
+          ...data,
+          settlements: data.settlements.map((s) => (s.id === settlement.id ? updated.value : s)),
+        };
+        if (settlementState(updated.value) === 'closed') {
+          payOff(settlement.coversUpToId);
+        }
+        return ok(data);
+      }
+      case 'cancelSettlement': {
+        data = {
+          ...data,
+          settlements: data.settlements.map((s) =>
+            s.id === request.settlementId ? { ...s, cancelledAt: NOW } : s,
+          ),
+        };
+        return ok(data);
       }
     }
-  });
-  return requests;
+  }
+
+  function payOff(coversUpToId: number) {
+    const paid = paidOffExpenses(data.expenses, coversUpToId);
+    data = {
+      ...data,
+      expenses: data.expenses.map((e) => paid.find((p) => p.id === e.id) ?? e),
+    };
+  }
 }
 
 /** Starts the app already unlocked, as on a phone that entered the passcode before. */

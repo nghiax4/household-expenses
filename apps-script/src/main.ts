@@ -1,7 +1,7 @@
 // Entry points Apps Script calls. The build (apps-script/build.mjs) exposes these as the
 // global functions doGet, doPost and setupStorage.
 import { fail, ok } from '../../src/domain/result';
-import type { SheetCell } from './expensesTab';
+import type { SheetCell } from './cells';
 import { handleRequest, type SheetStorage } from './handleRequest';
 import type { TabName } from './schema';
 import { SPREADSHEET_ID_KEY } from './setupStorage';

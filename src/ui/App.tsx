@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
-import { ExpensesScreen } from './ExpensesScreen';
 import { PasscodeScreen } from './PasscodeScreen';
 import { forgetPasscode, loadSavedPasscode, savePasscode } from './savedPasscode';
 import { ScrollFades } from './ScrollFades';
+import { UnlockedApp } from './UnlockedApp';
 
 export function App() {
   const [passcode, setPasscode] = useState(loadSavedPasscode);
@@ -12,20 +12,21 @@ export function App() {
     setPasscode(newPasscode);
   }
 
-  // Stable, because the expenses screen reloads whenever its props change.
+  // Stable, because the app reloads the sheet whenever its props change.
   const handlePasscodeRejected = useCallback(() => {
     forgetPasscode();
     setPasscode(null);
   }, []);
 
   return (
-    <main className="mx-auto min-h-screen max-w-md bg-white px-4 py-6 text-slate-900">
+    // The bottom padding keeps the end of every screen clear of the tab bar.
+    <main className="mx-auto min-h-screen max-w-md bg-white px-4 pt-6 pb-24 text-slate-900">
       <ScrollFades edges="screen">
         <h1 className="text-2xl font-semibold">Household Expenses</h1>
         {passcode === null ? (
           <PasscodeScreen onUnlocked={handleUnlocked} />
         ) : (
-          <ExpensesScreen passcode={passcode} onPasscodeRejected={handlePasscodeRejected} />
+          <UnlockedApp passcode={passcode} onPasscodeRejected={handlePasscodeRejected} />
         )}
       </ScrollFades>
     </main>

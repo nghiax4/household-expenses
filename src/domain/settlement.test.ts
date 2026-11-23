@@ -2,7 +2,20 @@ import { describe, expect, it } from 'vitest';
 import type { Expense } from './expense';
 import { sum, type Cents, type PersonName } from './money';
 import { parsePersonCell, type PersonCell } from './personCell';
-import { collectUnpaidDebts, minimizeTransfers, netBalances, type Transfer } from './settlement';
+import {
+  collectUnpaidDebts,
+  lockingSettlement,
+  minimizeTransfers,
+  netBalances,
+  paidOffExpenses,
+  pendingSettlement,
+  proposeSettlement,
+  sameTransfers,
+  settlementState,
+  withTransferStatuses,
+  type Settlement,
+  type Transfer,
+} from './settlement';
 
 // Made-up people and amounts (the repo is public), in person-column order.
 const PEOPLE = ['Anh', 'Bảo', 'Chi', 'Dương', 'Em', 'Giang', 'Hà'];
@@ -175,6 +188,142 @@ describe('minimizeTransfers', () => {
       expect(transfers.every((transfer) => transfer.amount > 0)).toBe(true);
       expect([...balancesAfter(balances, transfers).values()].every((b) => b === 0)).toBe(true);
     }
+  });
+});
+
+describe('proposeSettlement', () => {
+  it('covers up to the latest expense ID, including a deleted one', () => {
+    const expenses = [
+      ...EXAMPLE_EXPENSES,
+      expense(6, 'Anh', ['$1.00 · Paid', '$1.00 · Not paid', NI, NI, NI, NI, NI], '2026-11-03'),
+    ];
+    const proposal = proposeSettlement(expenses, PEOPLE);
+    expect(proposal?.coversUpToId).toBe(6);
+    // The deleted expense's share isn't a debt.
+    expect(proposal?.debts).toEqual(collectUnpaidDebts(EXAMPLE_EXPENSES, 5));
+    expect(proposal?.transfers).toHaveLength(4);
+  });
+
+  it('is null when every share is paid, or there are no expenses', () => {
+    expect(proposeSettlement([], PEOPLE)).toBeNull();
+    const paid = expense(1, 'Anh', ['$5.00 · Paid', '$5.00 · Paid', NI, NI, NI, NI, NI]);
+    expect(proposeSettlement([paid], PEOPLE)).toBeNull();
+  });
+
+  it('has no transfers when the unpaid shares cancel out', () => {
+    const expenses = [
+      expense(1, 'Anh', ['$5.00 · Paid', '$5.00 · Not paid', NI, NI, NI, NI, NI]),
+      expense(2, 'Bảo', ['$5.00 · Not paid', '$5.00 · Paid', NI, NI, NI, NI, NI]),
+    ];
+    const proposal = proposeSettlement(expenses, PEOPLE);
+    expect(proposal?.debts).toHaveLength(2);
+    expect(proposal?.transfers).toEqual([]);
+  });
+});
+
+describe('sameTransfers', () => {
+  const a: Transfer = { from: 'Anh', to: 'Bảo', amount: 100 };
+  const b: Transfer = { from: 'Chi', to: 'Bảo', amount: 200 };
+  it('compares who, whom, how much and the order', () => {
+    expect(sameTransfers([a, b], [{ ...a }, { ...b }])).toBe(true);
+    expect(sameTransfers([], [])).toBe(true);
+    expect(sameTransfers([a, b], [b, a])).toBe(false);
+    expect(sameTransfers([a], [{ ...a, amount: 101 }])).toBe(false);
+    expect(sameTransfers([a], [a, b])).toBe(false);
+  });
+});
+
+/** Settlement #id covering expenses up to #5: Chi → Anh $10.00 and Dương → Anh $5.00. */
+function settlement(id: number, overrides: Partial<Settlement> = {}): Settlement {
+  return {
+    id,
+    createdAt: '2026-11-20 09:00',
+    coversUpToId: 5,
+    lines: [
+      { from: 'Chi', to: 'Anh', amount: 1000, status: 'Not paid', paidAt: null },
+      { from: 'Dương', to: 'Anh', amount: 500, status: 'Not paid', paidAt: null },
+    ],
+    cancelledAt: null,
+    ...overrides,
+  };
+}
+
+const ALL_PAID = settlement(1).lines.map((line) => ({
+  ...line,
+  status: 'Paid' as const,
+  paidAt: '2026-11-21 10:00',
+}));
+
+describe('settlement state and locks', () => {
+  it('is pending until every line is paid, then closed; cancelled wins', () => {
+    expect(settlementState(settlement(1))).toBe('pending');
+    expect(settlementState(settlement(1, { lines: ALL_PAID }))).toBe('closed');
+    expect(settlementState(settlement(1, { cancelledAt: '2026-11-20 10:00' }))).toBe('cancelled');
+  });
+
+  it('locks expenses up to #N only while the settlement is pending', () => {
+    const closed = settlement(1, { lines: ALL_PAID });
+    const cancelled = settlement(2, { cancelledAt: '2026-11-21 10:00' });
+    const pending = settlement(3, { coversUpToId: 8 });
+    expect(pendingSettlement([closed, cancelled])).toBeNull();
+    expect(lockingSettlement([closed, cancelled], 1)).toBeNull();
+    expect(lockingSettlement([closed, cancelled, pending], 8)?.id).toBe(3);
+    expect(lockingSettlement([closed, cancelled, pending], 9)).toBeNull();
+  });
+});
+
+describe('withTransferStatuses', () => {
+  const chiPaid = { from: 'Chi', to: 'Anh', status: 'Paid' } as const;
+
+  it('marks lines paid with the time, and back to not paid', () => {
+    const marked = withTransferStatuses(settlement(1), [chiPaid], '2026-11-21 10:00');
+    expect(marked.ok && marked.value.lines).toEqual([
+      { from: 'Chi', to: 'Anh', amount: 1000, status: 'Paid', paidAt: '2026-11-21 10:00' },
+      { from: 'Dương', to: 'Anh', amount: 500, status: 'Not paid', paidAt: null },
+    ]);
+    const unmarked =
+      marked.ok && withTransferStatuses(marked.value, [{ ...chiPaid, status: 'Not paid' }], 'x');
+    expect(unmarked && unmarked.ok && unmarked.value).toEqual(settlement(1));
+  });
+
+  it('keeps the first paid time when a line is marked paid again', () => {
+    const once = withTransferStatuses(settlement(1), [chiPaid], '2026-11-21 10:00');
+    const twice = once.ok && withTransferStatuses(once.value, [chiPaid], 'later');
+    expect(twice && twice.ok && twice.value.lines[0]?.paidAt).toBe('2026-11-21 10:00');
+  });
+
+  it('refuses an unknown line, a closed settlement and a cancelled one', () => {
+    expect(
+      withTransferStatuses(settlement(1), [{ from: 'Anh', to: 'Chi', status: 'Paid' }], 't'),
+    ).toEqual({ ok: false, error: 'Settlement #1 has no transfer from Anh to Chi.' });
+    expect(
+      withTransferStatuses(
+        settlement(2, { lines: ALL_PAID }),
+        [{ ...chiPaid, status: 'Not paid' }],
+        't',
+      ),
+    ).toEqual({ ok: false, error: 'Settlement #2 is already closed: every transfer was paid.' });
+    expect(withTransferStatuses(settlement(3, { cancelledAt: 't' }), [], 't')).toEqual({
+      ok: false,
+      error: 'Settlement #3 was cancelled.',
+    });
+  });
+});
+
+describe('paidOffExpenses', () => {
+  it('marks every unpaid share Paid on live expenses up to #N, and leaves the rest out', () => {
+    const expenses = [
+      expense(1, 'Anh', ['$5.00 · Paid', '$5.00 · Not paid', '$5.00 · Paid', NI, NI, NI, NI]),
+      expense(2, 'Anh', ['$5.00 · Paid', '$5.00 · Paid', NI, NI, NI, NI, NI]),
+      expense(3, 'Anh', ['$5.00 · Paid', '$5.00 · Not paid', NI, NI, NI, NI, NI], '2026-11-02'),
+      expense(4, 'Anh', ['$5.00 · Paid', '$5.00 · Not paid', NI, NI, NI, NI, NI]),
+    ];
+    const changed = paidOffExpenses(expenses, 3);
+    expect(changed.map((e) => e.id)).toEqual([1]);
+    expect(changed[0]?.people).toEqual({
+      ...expenses[0]!.people,
+      Bảo: { kind: 'share', amount: 500, status: 'Paid' },
+    });
   });
 });
 

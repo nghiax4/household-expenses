@@ -1,5 +1,7 @@
 import type { Expense } from './expense';
 import { sum, type Cents, type PersonName } from './money';
+import type { PersonCell, ShareStatus } from './personCell';
+import { fail, ok, type Result } from './result';
 
 /** One unpaid share: the debtor owes the expense's payer this amount. */
 export interface Debt {
@@ -131,4 +133,146 @@ function settleGroup(group: readonly Balance[]): Transfer[] {
     }
   }
   return transfers;
+}
+
+/** What "Get total settlement" would create right now. */
+export interface SettlementProposal {
+  /** The latest expense ID: the settlement covers (and, while open, locks) expenses #1 to #N. */
+  coversUpToId: number;
+  /** Every unpaid share it covers. */
+  debts: Debt[];
+  /** Empty when the unpaid shares cancel out, so nobody needs to send money. */
+  transfers: Transfer[];
+}
+
+/** The settlement to propose now, or null when every share has been paid back. */
+export function proposeSettlement(
+  expenses: readonly Expense[],
+  people: readonly PersonName[],
+): SettlementProposal | null {
+  const coversUpToId = Math.max(0, ...expenses.map((expense) => expense.id));
+  const debts = collectUnpaidDebts(expenses, coversUpToId);
+  if (debts.length === 0) {
+    return null;
+  }
+  return { coversUpToId, debts, transfers: minimizeTransfers(netBalances(people, debts)) };
+}
+
+/** True when both lists have the same transfers in the same order. */
+export function sameTransfers(a: readonly Transfer[], b: readonly Transfer[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((t, i) => t.from === b[i]?.from && t.to === b[i]?.to && t.amount === b[i]?.amount)
+  );
+}
+
+/** One transfer of a saved settlement, ticked off once it has been sent. */
+export interface SettlementLine extends Transfer {
+  status: ShareStatus;
+  /** When it was marked Paid, or null while it's Not paid. */
+  paidAt: string | null;
+}
+
+/** A saved settlement: rows of the Settlements tab sharing one Settlement ID. */
+export interface Settlement {
+  /** Sequential and never reused. */
+  id: number;
+  /** When it was created, e.g. "2026-11-22 14:05". */
+  createdAt: string;
+  coversUpToId: number;
+  /** Never empty: unpaid shares that cancel out are settled without saving a settlement. */
+  lines: SettlementLine[];
+  /** When it was cancelled, or null. */
+  cancelledAt: string | null;
+}
+
+/**
+ * Pending until every line is Paid, then closed. Derived rather than stored, so it can't
+ * disagree with the lines.
+ */
+export type SettlementState = 'pending' | 'closed' | 'cancelled';
+
+export function settlementState(settlement: Settlement): SettlementState {
+  if (settlement.cancelledAt !== null) {
+    return 'cancelled';
+  }
+  return settlement.lines.every((line) => line.status === 'Paid') ? 'closed' : 'pending';
+}
+
+/** The settlement still being paid, if any. There's at most one. */
+export function pendingSettlement(settlements: readonly Settlement[]): Settlement | null {
+  return settlements.find((settlement) => settlementState(settlement) === 'pending') ?? null;
+}
+
+/**
+ * The pending settlement that covers this expense, if any. While it's pending, the expense
+ * can't be edited, deleted or marked: that would change amounts the settlement already used.
+ */
+export function lockingSettlement(
+  settlements: readonly Settlement[],
+  expenseId: number,
+): Settlement | null {
+  const pending = pendingSettlement(settlements);
+  return pending && expenseId <= pending.coversUpToId ? pending : null;
+}
+
+/** A line's new status, as the app sends it. Lines are known by who pays whom. */
+export interface TransferStatus {
+  from: PersonName;
+  to: PersonName;
+  status: ShareStatus;
+}
+
+/**
+ * The settlement with these lines marked Paid or Not paid at `time`. Only a pending settlement
+ * can change: a closed one has already marked its shares Paid.
+ */
+export function withTransferStatuses(
+  settlement: Settlement,
+  changes: readonly TransferStatus[],
+  time: string,
+): Result<Settlement> {
+  const state = settlementState(settlement);
+  if (state === 'cancelled') {
+    return fail(`Settlement #${settlement.id} was cancelled.`);
+  }
+  if (state === 'closed') {
+    return fail(`Settlement #${settlement.id} is already closed: every transfer was paid.`);
+  }
+  let lines = settlement.lines;
+  for (const { from, to, status } of changes) {
+    if (!lines.some((line) => line.from === from && line.to === to)) {
+      return fail(`Settlement #${settlement.id} has no transfer from ${from} to ${to}.`);
+    }
+    lines = lines.map((line) => {
+      if (line.from !== from || line.to !== to || line.status === status) {
+        return line;
+      }
+      return { ...line, status, paidAt: status === 'Paid' ? time : null };
+    });
+  }
+  return ok({ ...settlement, lines });
+}
+
+/**
+ * What closing a settlement changes: each live expense up to #N that still has Not paid shares,
+ * with those shares now Paid. That's the clean slate after everyone has sent their transfer.
+ */
+export function paidOffExpenses(expenses: readonly Expense[], coversUpToId: number): Expense[] {
+  return expenses.flatMap((expense) => {
+    if (expense.deletedAt !== null || expense.id > coversUpToId) {
+      return [];
+    }
+    const isUnpaid = (cell: PersonCell) => cell.kind === 'share' && cell.status === 'Not paid';
+    if (!Object.values(expense.people).some(isUnpaid)) {
+      return [];
+    }
+    const people = Object.fromEntries(
+      Object.entries(expense.people).map(([person, cell]): [PersonName, PersonCell] => [
+        person,
+        cell.kind === 'share' ? { ...cell, status: 'Paid' } : cell,
+      ]),
+    );
+    return [{ ...expense, people }];
+  });
 }

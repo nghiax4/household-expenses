@@ -57,7 +57,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Screen words vs storage: "Paid back" and "Paid the bill" are only on screen; the sheet keeps "Paid" / "Not paid".
 - The app sends only the shares that changed, each with its **new status** (not "toggle"), so a phone showing an old list can't flip a share back or overwrite another phone's change to someone else. Shares already at that status are neither written nor logged.
 - The backend checks every change before writing any, and refuses the whole Save for the payer's share, someone not involved, a deleted expense, an ID it can't find, an ID on two rows, or a row it can't read. Otherwise it rewrites each changed person cell, adds one Activity row per person (`Marked paid` / `Marked not paid`, e.g. `#2 "Internet": Chi $10.00, Not paid → Paid.`), and returns the tab read back.
-- Still to come with settlements: refuse shares locked by a pending settlement ("covered by settlement #K").
+- Shares on expenses covered by a pending settlement are locked (see Settlements): the card shows no Mark who paid / Edit buttons, and the backend refuses them too.
 
 ## Quick-add templates (recurring bills) (built 2026-11-22)
 - Presets: name, payer, participants, plus an optional default amount. **Templates always split equally.** They don't affect balances.
@@ -74,21 +74,25 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - Ideas don't touch money, so they're not written to the Activity log. The row itself records when the note was added.
 - **Claude Code pickup:** at the start of each session, Claude reads the Ideas tab through the Google Drive connector and lists the Open notes. After a note is discussed, the user (or Claude in Chrome, if asked) sets its Status and Outcome.
 
-## Settlements ("Get total settlement")
-1. Anyone taps **Get total settlement**.
+## Settlements ("Get total settlement") (built 2026-11-22)
+1. Anyone taps **Get total settlement** on the **Settle up** screen. The app reads the sheet fresh and shows a **preview** first (the transfers, "the 9 unpaid shares on 4 expenses", and that those expenses get locked); nothing is saved until **Create** (user's choice, 2026-11-22). The backend recomputes and refuses if the result no longer matches the preview (another phone saved in between), so what's saved is what was shown. It also refuses while any Expenses row is unreadable (the settlement could miss what it owes), while another settlement is pending, or when nothing is unpaid ("Nothing to settle").
 2. The app gathers every share that's still **Not paid** on expenses up to the latest expense ID (call it N). Shares already marked Paid individually are skipped. The settlement records **"covers up to expense #N"**.
 3. It computes each person's net balance and the **minimum number of transfers** to settle everyone.
    - Algorithm: bitmask DP. Min transfers = (number of people with a nonzero balance) − (max number of disjoint zero-sum subsets). With 7 or fewer people this is trivial.
-4. The settlement is **frozen** at that moment. While it's pending, expenses #1 to #N are **locked**: their Not-paid shares still show as **Not paid** but can't be marked Paid individually (that would double-count with the settlement transfer), and those expenses can't be edited or deleted (that would change amounts the settlement already computed). Tapping one in the app explains "covered by settlement #K". Expenses added afterward get IDs above N and go into the next period.
-5. Each transfer line (e.g., "Bảo → Anh $81.24") has its own **Paid** checkbox.
-6. When **all lines are checked**, the settlement closes and every Not-paid share on expenses #1 to #N flips to **Paid**. That's a clean slate.
-7. Past settlements stay viewable in history.
+4. The settlement is **frozen** at that moment. While it's pending, expenses #1 to #N are **locked**: their Not-paid shares still show as **Not paid** but can't be marked Paid individually (that would double-count with the settlement transfer), and those expenses can't be edited or deleted (that would change amounts the settlement already computed). Their cards show "In settlement #K, so it can't be changed until every transfer is paid (see Settle up)" instead of the buttons. Expenses added afterward get IDs above N and go into the next period (adding still works while one is pending).
+5. Each transfer line (e.g., "Bảo → Anh $81.24", red until paid, green with ✓ after) is ticked off in a **Mark transfers paid** checklist with one Save, like Mark who paid. Unticking is allowed while the settlement is pending. Only changed lines are sent, as new statuses.
+6. When **all lines are checked**, the settlement closes (the checklist warns before Save) and every Not-paid share on expenses #1 to #N flips to **Paid** in the same request. That's a clean slate, and the expenses unlock. A closed settlement can't be changed.
+7. Past settlements (newest first, "Paid off Nov 2" or "Cancelled Nov 10") stay viewable on the Settle up screen.
+8. **Cancel settlement** (user's choice, 2026-11-22): allowed only while **no line is ticked** (money that already moved would be hidden otherwise; untick first). It asks first, fills in "Cancelled at" on its rows (they stay, so IDs are never reused), logs it, and unlocks the expenses. Cancelled transfers show in gray.
+9. If the unpaid shares **cancel each other out** (nobody needs to send money), the preview says so and offers **Mark all paid**, which flips those shares to Paid right away without saving a settlement (a settlement with no transfer lines can't be stored as rows).
+- Activity entries: Created settlement, Marked transfer paid / not paid, Closed settlement (lists every share it marked Paid), Cancelled settlement, Settled without transfers.
 - Known limitation (MVP): partial repayment of a single share isn't tracked. Leftover debt rolls into the next settlement.
 
 ## Views
+- **Navigation** (built 2026-11-22, user's choice): a **bottom tab bar** fixed at the bottom of the screen, like most iPhone apps (Expenses, Settle up; Activity, What I owe and Ideas will join it, five at most). Switching tabs keeps each screen's state, so a half-typed expense survives a look at Settle up. Dialogs cover the bar.
 - **Expense list** (newest first) with **search and filters**: by person, payer, date range, keyword.
 - **"What I owe / am owed" view**: pick a person from a list on that screen to see their unpaid shares and running totals.
-- **Settlements**: the current pending settlement (with its checkboxes) plus history.
+- **Settle up** (built 2026-11-22): Get total settlement, or the pending settlement with its transfers, plus history. See "Settlements".
 - **Activity log**: what changed and when, e.g., `Edited "Grocery delivery": $44.27 → $42.27`. It doesn't say who.
 - **Ideas**: add a note, and see or update the list (see "Ideas" above).
 
@@ -119,7 +123,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 | Tab | Columns | Notes |
 |---|---|---|
 | **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it was deleted (hidden from the app; see Safety). The history of changes to an expense lives only in Activity. |
-| **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at | One row per transfer line. A settlement is closed when all its lines are Paid (derived, not stored). |
+| **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at, Cancelled at | One row per transfer line; the rows of one settlement repeat its ID, Created at, Covers up to and Cancelled at. Paid is `Paid` or `Not paid`. A settlement is closed when all its lines are Paid and cancelled when Cancelled at is filled (both derived, not stored). Unlike Expenses, one unreadable row fails the whole load (settlements decide what's locked, so guessing is unsafe; only Claude edits this tab by hand). At most one settlement may be pending. "Cancelled at" added 2026-11-22. |
 | **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Edited by hand (by Claude); the app only reads it. See "Quick-add templates". |
 | **Activity** | Time, Action, Details | Append-only. |
 | **Ideas** | ID, Created at, Note, Status, Outcome | One row per note, with a sequential integer ID. Status is `Open`, `Done` or `Dropped`: a dropdown on D2:D1000 that rejects any other value, shown as plain text so empty rows stay clean. Outcome is optional. Rows are never deleted. |
