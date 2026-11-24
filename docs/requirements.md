@@ -68,6 +68,13 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 - **Using one:** a **Quick fill** row of buttons at the top of the Add form. Tapping one fills the description (the template's name), payer, people (equal split) and the default amount; with no default (rent, electricity) the Total box is left empty. The keypad doesn't open on its own (it did at first; the user found it annoying). Everything stays editable, including switching to Amounts or Percent, before Save.
 - Starting set (added 2026-11-22, English names): Rent, Internet, Electricity, Insurance, all for the 4 roommates (payers and amounts in private notes; rent has no default).
 
+## Tags (built 2026-11-23)
+- The user's idea: make the recurring bills stand out in the list. They chose **general tags** over a single "bill" field and over guessing from the description (which they found hacky).
+- Any expense can have **0+ short tags** (e.g. Rent, Groceries, Rides), shown as small pills under the date line. Tags are trimmed, can't contain a comma (the sheet keeps them comma-separated in the Tags cell) and are at most 30 characters; "rent" and "Rent" count as the same tag (the existing spelling wins).
+- **Bills stand out:** a tag equal to a template's name (ignoring case) is a solid pill in that bill's own color (by Templates-tab order; no red or green, which mean Not paid / Paid). Other tags are quiet gray outlines.
+- **Add/Edit form:** a Tags section with the bills first, then the tags in use (most used first), tap to add or remove; plus a "New tag" box (Enter or Add tag). Picking a template adds its name as a tag, replacing another template's tag (like everything else a template fills in) and keeping ordinary tags.
+- Tags change only through Edit, so an expense locked by a settlement can't be re-tagged. Edits log tag changes in Activity ("Tags (none) → Rent"); new expenses list their tags.
+
 ## Notes (built 2026-11-23; stored in the Ideas tab)
 - A place to jot down, on the spot, a case the app didn't handle (e.g., "rent was split 5 ways this month because a guest stayed"), to talk through with Claude Code later and change the app. The user asked for the minimum: something to type into (2026-11-23).
 - A **Notes** tab in the bottom bar: a text box (line breaks kept) and **Add note**. Anyone can add one; the app fills in the time and saves it as Open. A half-typed note survives switching tabs.
@@ -124,19 +131,19 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ### Storage schema: "layout 1", sheet2-style, 5 tabs (approved by the user 2026-11-17; Ideas tab added 2026-11-19)
 | Tab | Columns | Notes |
 |---|---|---|
-| **Expenses** | ID, Date, Description, Total, Payer, Note, Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it was deleted (hidden from the app; see Safety). The history of changes to an expense lives only in Activity. |
+| **Expenses** | ID, Date, Description, Total, Payer, Note, Tags (comma-separated, added 2026-11-23), Deleted at, then **one column per person** | Looks like sheet2 and the app. A person cell is `"$12.34 · Not paid"`, `"$12.34 · Paid"`, or `"Not involved"`. It's never blank on an expense row. People columns come last so adding a person appends a column (filled with "Not involved" on existing rows). A non-empty "Deleted at" means it was deleted (hidden from the app; see Safety). The history of changes to an expense lives only in Activity. |
 | **Settlements** | Settlement ID, Created at, Covers up to expense #, From, To, Amount, Paid, Paid at, Cancelled at | One row per transfer line; the rows of one settlement repeat its ID, Created at, Covers up to and Cancelled at. Paid is `Paid` or `Not paid`. A settlement is closed when all its lines are Paid and cancelled when Cancelled at is filled (both derived, not stored). Unlike Expenses, one unreadable row fails the whole load (settlements decide what's locked, so guessing is unsafe; only Claude edits this tab by hand). At most one settlement may be pending. "Cancelled at" added 2026-11-22. |
 | **Templates** | Name, Payer, Participants (comma-separated names), Default amount | Equal split only. Edited by hand (by Claude); the app only reads it. See "Quick-add templates". |
 | **Activity** | Time, Action, Details | Append-only. |
 | **Ideas** | ID, Created at, Note, Status, Outcome | One row per note, with a sequential integer ID. Status is `Open`, `Done` or `Dropped`: a dropdown on D2:D1000 that rejects any other value, shown as plain text so empty rows stay clean. Outcome is optional. Rows are never deleted. |
 
-Formatting on the Expenses person columns (H2:Z1000), set up by the setup script through Apps Script:
+Formatting on the Expenses person columns (I2:AA1000; they started at H until the Tags column was added on 2026-11-23), set up by the setup script through Apps Script:
 - Conditional formatting (custom formulas, in this order):
-  - `ISNUMBER(SEARCH(" · Not paid", H2))`: dark red (#C00000) fill, white text.
-  - `ISNUMBER(SEARCH(" · Paid", H2))`: light green (#D9EAD3) fill.
-  - `EXACT(H2, "Not involved")`: gray (#808080) text, no fill.
-  - `AND($A2<>"", H$1<>"", H2="")`: yellow (#FFE599) fill. This flags a missing cell on an expense row, because data validation never checks empty cells.
-- Data validation, "show warning" (doesn't block): `=IF(OR($A2="", H$1=""), H2="", OR(EXACT(H2, "Not involved"), REGEXMATCH(H2, "^\$[0-9,]+\.[0-9]{2} · (Paid|Not paid)$")))`. Outside expense rows and person columns, a cell must be empty. `EXACT` is needed because `=` ignores case in Sheets. `REGEXMATCH` doesn't survive an xlsx import, so it must be created in Sheets.
+  - `ISNUMBER(SEARCH(" · Not paid", I2))`: dark red (#C00000) fill, white text.
+  - `ISNUMBER(SEARCH(" · Paid", I2))`: light green (#D9EAD3) fill.
+  - `EXACT(I2, "Not involved")`: gray (#808080) text, no fill.
+  - `AND($A2<>"", I$1<>"", I2="")`: yellow (#FFE599) fill. This flags a missing cell on an expense row, because data validation never checks empty cells.
+- Data validation, "show warning" (doesn't block): `=IF(OR($A2="", I$1=""), I2="", OR(EXACT(I2, "Not involved"), REGEXMATCH(I2, "^\$[0-9,]+\.[0-9]{2} · (Paid|Not paid)$")))`. Outside expense rows and person columns, a cell must be empty. `EXACT` is needed because `=` ignores case in Sheets. `REGEXMATCH` doesn't survive an xlsx import, so it must be created in Sheets.
 - Tested 2026-11-17 in the sample: valid cells show no flag; lowercase "not involved" and junk text in an empty row get the "Invalid" flag; a blank cell on an expense row turns yellow.
 - The backend parses person cells with the same rules (exact text, case-sensitive) and reports any cell that doesn't match, including a blank one on an expense row, instead of guessing.
 

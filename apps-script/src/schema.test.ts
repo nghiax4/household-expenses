@@ -27,15 +27,15 @@ describe('parsePeopleSetting', () => {
 });
 
 describe('sheet layout', () => {
-  it('starts people at column H, matching the formulas', () => {
-    expect(FIRST_PERSON_COLUMN).toBe(8);
-    expect(PERSON_CELL_RULES.valid).toContain('H2');
+  it('starts people at column I (after Tags), matching the formulas', () => {
+    expect(FIRST_PERSON_COLUMN).toBe(9);
+    expect(PERSON_CELL_RULES.valid).toContain('I2');
   });
 
-  it('writes the validation formula exactly as tested in the sample sheet', () => {
+  it('writes the validation formula as tested in the sample sheet, moved to column I', () => {
     expect(PERSON_CELL_RULES.valid).toBe(
-      '=IF(OR($A2="", H$1=""), H2="", OR(EXACT(H2, "Not involved"), ' +
-        'REGEXMATCH(H2, "^\\$[0-9,]+\\.[0-9]{2} · (Paid|Not paid)$")))',
+      '=IF(OR($A2="", I$1=""), I2="", OR(EXACT(I2, "Not involved"), ' +
+        'REGEXMATCH(I2, "^\\$[0-9,]+\\.[0-9]{2} · (Paid|Not paid)$")))',
     );
   });
 });

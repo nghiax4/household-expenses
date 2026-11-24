@@ -16,6 +16,7 @@ import {
   type ShareStatus,
 } from '../../src/domain/personCell';
 import { fail, ok, type Result } from '../../src/domain/result';
+import { formatTags, parseTags } from '../../src/domain/tags';
 import { dollarsCell, literal, type SheetCell } from './cells';
 import { TAB_HEADERS } from './schema';
 
@@ -76,6 +77,7 @@ export function expenseRow(expense: Expense, people: readonly PersonName[]): She
     dollarsCell(expense.total),
     literal(expense.payer),
     literal(expense.note),
+    literal(formatTags(expense.tags)),
     literal(expense.deletedAt ?? ''),
     ...people.map((person) => personCell(expense, person)),
   ];
@@ -138,7 +140,8 @@ export function addedExpenseActivity(
     const cell = expense.people[person];
     return cell?.kind === 'share' ? [`${person} ${formatDollars(cell.amount)}`] : [];
   });
-  const details = `${summary(expense)} Split: ${shares.join(', ')}.${noteSuffix(expense)}`;
+  const details =
+    `${summary(expense)} Split: ${shares.join(', ')}.${noteSuffix(expense)}` + tagsSuffix(expense);
   return [literal(time), literal('Added expense'), literal(details)];
 }
 
@@ -174,6 +177,7 @@ export function expenseChanges(
     ['Total', formatDollars(before.total), formatDollars(after.total)],
     ['Payer', before.payer, after.payer],
     ['Note', `"${before.note}"`, `"${after.note}"`],
+    ['Tags', tagsText(before.tags), tagsText(after.tags)],
     ...people.map((person): [string, string, string] => [
       person,
       formatPersonCell(before.people[person] ?? { kind: 'notInvolved' }),
@@ -205,10 +209,19 @@ function noteSuffix(expense: Expense): string {
   return expense.note === '' ? '' : ` Note: "${expense.note}"`;
 }
 
+function tagsSuffix(expense: Expense): string {
+  return expense.tags.length === 0 ? '' : ` Tags: ${formatTags(expense.tags)}.`;
+}
+
+/** Tags in an edit's Activity entry, e.g. "Rent, Groceries", or "(none)". */
+function tagsText(tags: readonly string[]): string {
+  return tags.length === 0 ? '(none)' : formatTags(tags);
+}
+
 function readPeople(header: readonly string[]): Result<PersonName[]> {
   if (!FIXED_HEADERS.every((name, i) => header[i] === name)) {
     return fail(
-      `The Expenses tab's header row has changed. Columns A to G must be: ` +
+      `The Expenses tab's header row has changed. Columns A to H must be: ` +
         `${FIXED_HEADERS.join(', ')}.`,
     );
   }
@@ -237,6 +250,7 @@ function readExpenseRow(row: readonly string[], people: readonly PersonName[]): 
     totalText = '',
     payer = '',
     note = '',
+    tagsText = '',
     deletedAt = '',
   ] = row;
 
@@ -279,6 +293,7 @@ function readExpenseRow(row: readonly string[], people: readonly PersonName[]): 
     total,
     payer,
     note,
+    tags: parseTags(tagsText),
     deletedAt: deletedAt === '' ? null : deletedAt,
     people: Object.fromEntries(cells),
   });

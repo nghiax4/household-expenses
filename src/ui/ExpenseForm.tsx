@@ -5,11 +5,13 @@ import { buildExpense, recentDescriptions, type Expense, type NewExpense } from 
 import { formatTypedAmount, parseTypedAmount, type PersonName } from '../domain/money';
 import { fail, ok, type Result } from '../domain/result';
 import { isEqualSplit, sharesFromTyped, type TypedSplit } from '../domain/split';
+import { billIndex, suggestedTags } from '../domain/tags';
 import type { Template } from '../domain/template';
 import { localDate } from './dates';
 import { Choice } from './Choice';
 import { SaveFailed } from './SaveFailed';
 import { SplitPicker } from './SplitPicker';
+import { TagPicker } from './TagPicker';
 import { Waiting } from './Waiting';
 
 interface Props {
@@ -44,6 +46,7 @@ export function ExpenseForm({
   const [participants, setParticipants] = useState(initial.participants);
   const [typed, setTyped] = useState(initial.typed);
   const [note, setNote] = useState(initial.note);
+  const [tags, setTags] = useState<string[]>(initial.tags);
   // A problem with what's typed, found before sending.
   const [error, setError] = useState<string | null>(null);
   // Why the backend (or the network) refused the save.
@@ -79,6 +82,12 @@ export function ExpenseForm({
     setParticipants(new Set(template.participants));
     setTyped(EQUAL_SPLIT);
     setAmountText(template.defaultAmount === null ? '' : formatTypedAmount(template.defaultAmount));
+    // The template's name is its bill tag. It replaces another template's bill tag (like
+    // everything else a template fills in); ordinary tags picked so far stay.
+    setTags((current) => [
+      template.name,
+      ...current.filter((tag) => billIndex(tag, data.templates) === null),
+    ]);
     setError(null);
   }
 
@@ -102,6 +111,7 @@ export function ExpenseForm({
       total: total.value,
       payer,
       note,
+      tags,
       shares: Object.fromEntries(shares.value),
     };
     // The backend checks again, but explaining a problem here saves a slow round trip.
@@ -303,6 +313,13 @@ export function ExpenseForm({
         />
       </div>
 
+      <TagPicker
+        suggestions={suggestedTags(data.expenses, data.templates)}
+        selected={tags}
+        templates={data.templates}
+        onChange={setTags}
+      />
+
       {saveError ? (
         <SaveFailed
           error={saveError}
@@ -386,6 +403,7 @@ interface FormValues {
   participants: ReadonlySet<PersonName>;
   typed: TypedSplit;
   note: string;
+  tags: string[];
 }
 
 /**
@@ -403,6 +421,7 @@ function initialValues(editing: Expense | undefined, people: readonly PersonName
       participants: new Set(),
       typed: EQUAL_SPLIT,
       note: '',
+      tags: [],
     };
   }
   const shares = new Map(
@@ -424,5 +443,6 @@ function initialValues(editing: Expense | undefined, people: readonly PersonName
       ? EQUAL_SPLIT
       : { mode: 'amounts', amounts, percents: {} },
     note: editing.note,
+    tags: editing.tags,
   };
 }

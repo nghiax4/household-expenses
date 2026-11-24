@@ -2,6 +2,7 @@ import type { Cents, PersonName } from './money';
 import type { PersonCell, ShareStatus } from './personCell';
 import { fail, ok, type Result } from './result';
 import { checkCustomSplit } from './split';
+import { normalizeTags } from './tags';
 
 /** One row of the Expenses tab. */
 export interface Expense {
@@ -13,6 +14,8 @@ export interface Expense {
   total: Cents;
   payer: PersonName;
   note: string;
+  /** Short labels such as "Rent" or "Groceries"; a template's name marks a bill. */
+  tags: string[];
   /** When it was deleted, or null if it's live. Deleted rows stay in the sheet, hidden. */
   deletedAt: string | null;
   /**
@@ -32,6 +35,7 @@ export interface NewExpense {
   total: Cents;
   payer: PersonName;
   note: string;
+  tags: readonly string[];
   /** Each participant's share. Everyone left out is Not involved. */
   shares: Readonly<Record<PersonName, Cents>>;
 }
@@ -70,6 +74,11 @@ export function buildExpense(
     return fail('Pick who paid.');
   }
 
+  const tags = normalizeTags(input.tags);
+  if (!tags.ok) {
+    return fail(tags.error);
+  }
+
   const shares = new Map(Object.entries(input.shares));
   const stranger = [...shares.keys()].find((person) => !people.includes(person));
   if (stranger !== undefined) {
@@ -99,6 +108,7 @@ export function buildExpense(
     total: input.total,
     payer: input.payer,
     note: input.note.trim(),
+    tags: tags.value,
     deletedAt: null,
     people: Object.fromEntries(cells),
   });

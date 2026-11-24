@@ -88,8 +88,10 @@ function parseNewExpense(value: unknown): NewExpense | null {
   if (!isRecord(value)) {
     return null;
   }
-  const { date, description, total, payer, note, shares } = value;
+  const { date, description, total, payer, note, tags, shares } = value;
   if (
+    !Array.isArray(tags) ||
+    !tags.every((tag): tag is string => typeof tag === 'string') ||
     typeof date !== 'string' ||
     typeof description !== 'string' ||
     typeof total !== 'number' ||
@@ -103,7 +105,7 @@ function parseNewExpense(value: unknown): NewExpense | null {
   if (!amounts.every((entry): entry is [string, number] => typeof entry[1] === 'number')) {
     return null;
   }
-  return { date, description, total, payer, note, shares: Object.fromEntries(amounts) };
+  return { date, description, total, payer, note, tags, shares: Object.fromEntries(amounts) };
 }
 
 function isTransfer(value: unknown): value is Transfer {

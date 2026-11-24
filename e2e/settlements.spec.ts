@@ -32,6 +32,7 @@ const START: SheetData = {
       total: 4500,
       payer: 'Anh',
       note: '',
+      tags: [],
       deletedAt: null,
       people: {
         Anh: share(1500, 'Paid'),
@@ -47,6 +48,7 @@ const START: SheetData = {
       total: 3500,
       payer: 'Bảo',
       note: '',
+      tags: [],
       deletedAt: null,
       people: {
         Anh: share(1500, 'Not paid'),

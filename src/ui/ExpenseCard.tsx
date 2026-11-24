@@ -1,13 +1,17 @@
 import type { Expense } from '../domain/expense';
 import { formatDollars, type PersonName } from '../domain/money';
+import type { Template } from '../domain/template';
 import { formatDate } from './dates';
 import { ShareChip } from './ShareChip';
+import { TagPill } from './TagPill';
 
 interface Props {
   expense: Expense;
   /** The household in person-column order, so chips always appear in the same order. */
   people: readonly PersonName[];
   today: string;
+  /** The bills: a tag matching a template's name gets that bill's color. */
+  templates: readonly Template[];
   /**
    * The settlement that took in this expense, if any. While it's pending the expense can't
    * change; once it's closed (paid off), never again.
@@ -20,7 +24,15 @@ interface Props {
 const CARD_BUTTON =
   'h-9 rounded-full border border-slate-400 px-4 text-sm font-medium active:bg-slate-100';
 
-export function ExpenseCard({ expense, people, today, lock, onMarkWhoPaid, onEdit }: Props) {
+export function ExpenseCard({
+  expense,
+  people,
+  today,
+  templates,
+  lock,
+  onMarkWhoPaid,
+  onEdit,
+}: Props) {
   const sharers = people.filter((person) => expense.people[person]?.kind === 'share');
   return (
     <li className="rounded-xl border border-slate-200 p-3">
@@ -31,6 +43,15 @@ export function ExpenseCard({ expense, people, today, lock, onMarkWhoPaid, onEdi
       <p className="text-sm text-slate-600">
         {formatDate(expense.date, today)} · Paid by {expense.payer}
       </p>
+      {expense.tags.length > 0 && (
+        <ul aria-label="Tags" className="mt-1.5 flex flex-wrap gap-1.5">
+          {expense.tags.map((tag) => (
+            <li key={tag}>
+              <TagPill tag={tag} templates={templates} />
+            </li>
+          ))}
+        </ul>
+      )}
       {expense.note !== '' && (
         <p className="mt-1 text-sm break-words text-slate-500">{expense.note}</p>
       )}

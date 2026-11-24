@@ -71,6 +71,7 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
               expense={expense}
               people={data.people}
               today={today}
+              templates={data.templates}
               lock={cardLock(data, expense.id)}
               onMarkWhoPaid={() => setMarking(expense)}
               onEdit={() => setForm({ editing: expense })}

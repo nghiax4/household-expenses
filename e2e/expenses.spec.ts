@@ -31,6 +31,7 @@ const START = {
       total: 3000,
       payer: 'Anh',
       note: '',
+      tags: [],
       deletedAt: null,
       people: { Anh: share(1500, 'Paid'), Bảo: share(1500, 'Not paid'), Chi: NI, Dương: NI },
     },
@@ -41,6 +42,7 @@ const START = {
       total: 4000,
       payer: 'Bảo',
       note: 'November',
+      tags: [],
       deletedAt: null,
       people: {
         Anh: share(1000, 'Paid'),
@@ -56,6 +58,7 @@ const START = {
       total: 100,
       payer: 'Anh',
       note: '',
+      tags: [],
       deletedAt: '2026-11-21 10:00',
       people: { Anh: share(100, 'Paid'), Bảo: NI, Chi: NI, Dương: NI },
     },
@@ -165,6 +168,7 @@ test('adds an equal split, checking the form before saving', async ({ page }) =>
     total: 1000,
     payer: 'Bảo',
     note: '  Phở night ',
+    tags: [],
     shares: { Anh: 333, Bảo: 334, Chi: 333 },
   };
   expect(added?.action === 'addExpense' && added.expense).toEqual(expected);
@@ -279,6 +283,7 @@ test('an expense only the payer shares has nothing to mark', async ({ page }) =>
     total: 300,
     payer: 'Anh',
     note: '',
+    tags: [],
     deletedAt: null,
     people: { Anh: share(300, 'Paid'), Bảo: NI, Chi: NI, Dương: NI },
   };
@@ -433,6 +438,18 @@ test('quick fill from a template, then save', async ({ page }) => {
   await expect(total).toHaveValue('55.00');
   await expect(pressed(paidBy)).toHaveText(['Bảo']);
   await expect(pressed(between)).toHaveText(PEOPLE);
+
+  // The template's name is its bill tag, replacing the other template's; a typed tag is added
+  // (Enter adds it rather than saving the form).
+  const tags = page.getByRole('group', { name: 'Tags (optional)' });
+  await expect(pressed(tags)).toHaveText(['✓ Internet']);
+  await tags.getByLabel('New tag').fill('Monthly');
+  await tags.getByLabel('New tag').press('Enter');
+  await expect(pressed(tags)).toHaveText(['✓ Internet', '✓ Monthly']);
+  await tags.getByLabel('New tag').fill('monthly');
+  await tags.getByRole('button', { name: 'Add tag' }).click();
+  await expect(pressed(tags)).toHaveText(['✓ Internet', '✓ Monthly']);
+
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByRole('heading', { name: 'Add expense' })).toHaveCount(0);
   const added = requests.at(-1);
@@ -440,8 +457,17 @@ test('quick fill from a template, then save', async ({ page }) => {
     description: 'Internet',
     total: 5500,
     payer: 'Bảo',
+    tags: ['Internet', 'Monthly'],
     shares: { Anh: 1375, Bảo: 1375, Chi: 1375, Dương: 1375 },
   });
+  const internetCard = page
+    .getByRole('list', { name: 'Expenses' })
+    .getByRole('listitem')
+    .filter({ has: page.getByRole('heading', { name: 'Internet' }) });
+  await expect(internetCard.getByRole('list', { name: 'Tags' }).getByRole('listitem')).toHaveText([
+    'Internet',
+    'Monthly',
+  ]);
 });
 
 test('edits an expense, keeping who had already paid back', async ({ page }) => {

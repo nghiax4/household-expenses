@@ -37,6 +37,7 @@ function expense(id: number, payer: PersonName, cells: string[], deletedAt?: str
     total: 0, // Not used by settlements.
     payer,
     note: '',
+    tags: [],
     deletedAt: deletedAt ?? null,
     people,
   };

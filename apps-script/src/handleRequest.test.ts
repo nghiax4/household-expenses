@@ -114,6 +114,7 @@ describe('handleRequest: passcode and request shape', () => {
           total: '10',
           payer: 'Anh',
           note: '',
+          tags: [],
           shares: {},
         },
       }),
@@ -129,6 +130,7 @@ describe('handleRequest: passcode and request shape', () => {
           total: 10,
           payer: 'Anh',
           note: '',
+          tags: [],
           shares: { Anh: '10' },
         },
       }),
@@ -190,6 +192,22 @@ describe('handleRequest: passcode and request shape', () => {
         statuses: [{ from: 'Anh', to: 'Bảo', status: 'paid' }],
       }),
     ],
+    [
+      'addExpense with tags that are not text',
+      body({
+        passcode: PASSCODE,
+        action: 'addExpense',
+        expense: {
+          date: '2026-11-20',
+          description: 'Pizza',
+          total: 1000,
+          payer: 'Anh',
+          note: '',
+          tags: [1],
+          shares: { Anh: 1000 },
+        },
+      }),
+    ],
     ['addNote without text', body({ passcode: PASSCODE, action: 'addNote' })],
     ['closeNote with a text ID', body({ passcode: PASSCODE, action: 'closeNote', noteId: '1' })],
     [
@@ -211,6 +229,7 @@ describe('handleRequest: expenses', () => {
     total: 1000,
     payer: 'Bảo',
     note: '',
+    tags: [],
     shares: { Anh: 333, Bảo: 334, Chi: 333 },
   };
   // The handler's return type is general; addExpense always answers with the tab's data.
@@ -261,6 +280,7 @@ describe('handleRequest: expenses', () => {
       total: 500,
       payer: 'Anh',
       note: 'lunch',
+      tags: ['Lunch', ' lunch '],
       shares: { Anh: 500 },
     });
 
@@ -271,6 +291,7 @@ describe('handleRequest: expenses', () => {
         'Pizza',
         '$10.00',
         'Bảo',
+        '',
         '',
         '',
         '$3.33 · Not paid',
@@ -284,6 +305,7 @@ describe('handleRequest: expenses', () => {
         '$5.00',
         'Anh',
         'lunch',
+        'Lunch',
         '',
         '$5.00 · Paid',
         'Not involved',
@@ -299,7 +321,7 @@ describe('handleRequest: expenses', () => {
       [
         '2026-11-21 14:05',
         'Added expense',
-        '#2 "Phở" (2026-11-20) $5.00, paid by Anh. Split: Anh $5.00. Note: "lunch"',
+        '#2 "Phở" (2026-11-20) $5.00, paid by Anh. Split: Anh $5.00. Note: "lunch" Tags: Lunch.',
       ],
     ]);
     expect(result.ok && result.value.expenses.map((e) => [e.id, e.description])).toEqual([
@@ -320,7 +342,10 @@ describe('handleRequest: expenses', () => {
 
   it('continues after the highest ID, even one on a broken row', () => {
     const storage = fakeStorage(['Anh']);
-    storage.tabs.Expenses.push(['7', 'not a date', 'Old', '$1.00', 'Anh', '', '', '$1.00 · Paid']);
+    storage.tabs.Expenses.push([
+      ...['7', 'not a date', 'Old', '$1.00', 'Anh', '', '', ''],
+      '$1.00 · Paid',
+    ]);
     const result = add(backend(storage), { ...pizza, payer: 'Anh', shares: { Anh: 1000 } });
     expect(storage.tabs.Expenses[2]?.[0]).toBe('8');
     expect(result.ok && result.value.problems).toEqual([
@@ -337,6 +362,7 @@ describe('handleRequest: marking shares paid', () => {
     'Pizza',
     '$10.00',
     'Bảo',
+    '',
     '',
     '',
     '$3.33 · Not paid',
@@ -362,7 +388,7 @@ describe('handleRequest: marking shares paid', () => {
     const storage = withPizza();
     const result = mark(backend(storage), { Chi: 'Paid', Anh: 'Paid' });
     expect(storage.tabs.Expenses[1]).toEqual([
-      ...PIZZA_ROW.slice(0, 7),
+      ...PIZZA_ROW.slice(0, 8),
       '$3.33 · Paid',
       '$3.34 · Paid',
       '$3.33 · Paid',
@@ -380,7 +406,7 @@ describe('handleRequest: marking shares paid', () => {
     });
 
     mark(backend(storage), { Chi: 'Not paid' });
-    expect(storage.tabs.Expenses[1]?.[9]).toBe('$3.33 · Not paid');
+    expect(storage.tabs.Expenses[1]?.[10]).toBe('$3.33 · Not paid');
     expect(storage.tabs.Activity.at(-1)).toEqual([
       '2026-11-21 14:05',
       'Marked not paid',
@@ -391,7 +417,7 @@ describe('handleRequest: marking shares paid', () => {
   it('writes and logs only the shares that actually change', () => {
     const storage = withPizza();
     expect(mark(backend(storage), { Anh: 'Not paid', Chi: 'Paid' }).ok).toBe(true);
-    expect(storage.tabs.Expenses[1]?.[7]).toBe('$3.33 · Not paid');
+    expect(storage.tabs.Expenses[1]?.[8]).toBe('$3.33 · Not paid');
     expect(storage.tabs.Activity).toHaveLength(2);
   });
 
@@ -431,7 +457,7 @@ describe('handleRequest: marking shares paid', () => {
 
   it('refuses a row it can’t read', () => {
     const storage = withPizza();
-    storage.tabs.Expenses[1] = [...PIZZA_ROW.slice(0, 7), 'oops', ...PIZZA_ROW.slice(8)];
+    storage.tabs.Expenses[1] = [...PIZZA_ROW.slice(0, 8), 'oops', ...PIZZA_ROW.slice(9)];
     expect(mark(backend(storage), { Chi: 'Paid' })).toEqual({
       ok: false,
       error: "Expense #1 can't be read. Fix its row in the sheet first.",
@@ -449,6 +475,7 @@ describe('handleRequest: editing and deleting', () => {
     'Bảo',
     '',
     '',
+    '',
     '$3.33 · Paid',
     '$3.34 · Paid',
     '$3.33 · Not paid',
@@ -460,6 +487,7 @@ describe('handleRequest: editing and deleting', () => {
     total: 1000,
     payer: 'Bảo',
     note: '',
+    tags: [],
     shares: { Anh: 333, Bảo: 334, Chi: 333 },
   };
 
@@ -479,6 +507,7 @@ describe('handleRequest: editing and deleting', () => {
       ...pizza,
       total: 1200,
       note: 'with drinks',
+      tags: ['Food'],
       shares: { Anh: 400, Bảo: 400, Chi: 200, Dương: 200 },
     });
     expect(storage.tabs.Expenses[1]).toEqual([
@@ -488,6 +517,7 @@ describe('handleRequest: editing and deleting', () => {
       '$12.00',
       'Bảo',
       'with drinks',
+      'Food',
       '',
       '$4.00 · Paid',
       '$4.00 · Paid',
@@ -498,7 +528,7 @@ describe('handleRequest: editing and deleting', () => {
       [
         '2026-11-21 14:05',
         'Edited expense',
-        '#1 "Pizza": Total $10.00 → $12.00; Note "" → "with drinks"; ' +
+        '#1 "Pizza": Total $10.00 → $12.00; Note "" → "with drinks"; Tags (none) → Food; ' +
           'Anh $3.33 · Paid → $4.00 · Paid; Bảo $3.34 · Paid → $4.00 · Paid; ' +
           'Chi $3.33 · Not paid → $2.00 · Not paid; Dương Not involved → $2.00 · Not paid.',
       ],
@@ -527,9 +557,9 @@ describe('handleRequest: editing and deleting', () => {
     const storage = withPizza();
     const result = remove(backend(storage));
     expect(storage.tabs.Expenses[1]).toEqual([
-      ...PIZZA_ROW.slice(0, 6),
+      ...PIZZA_ROW.slice(0, 7),
       '2026-11-21 14:05',
-      ...PIZZA_ROW.slice(7),
+      ...PIZZA_ROW.slice(8),
     ]);
     expect(storage.tabs.Activity.slice(1)).toEqual([
       [
@@ -570,11 +600,11 @@ describe('handleRequest: settlements', () => {
   // Anh paid $45.00 for Anh, Bảo and Chi; Bảo paid $35.00 for Anh, Bảo and Dương. Net: Anh is
   // owed $15.00 and Bảo $5.00; Chi owes $15.00 and Dương $5.00.
   const GROCERIES = [
-    ...['1', '2026-11-20', 'Groceries', '$45.00', 'Anh', '', ''],
+    ...['1', '2026-11-20', 'Groceries', '$45.00', 'Anh', '', '', ''],
     ...['$15.00 · Paid', '$15.00 · Not paid', '$15.00 · Not paid', 'Not involved'],
   ];
   const INTERNET = [
-    ...['2', '2026-11-21', 'Internet', '$35.00', 'Bảo', '', ''],
+    ...['2', '2026-11-21', 'Internet', '$35.00', 'Bảo', '', '', ''],
     ...['$15.00 · Not paid', '$15.00 · Paid', 'Not involved', '$5.00 · Not paid'],
   ];
   const TRANSFERS = [
@@ -643,7 +673,7 @@ describe('handleRequest: settlements', () => {
 
   it('refuses when nothing is unpaid, while one is open, or with an unreadable Expenses row', () => {
     const allPaid = [
-      ...GROCERIES.slice(0, 7),
+      ...GROCERIES.slice(0, 8),
       ...['$15.00 · Paid', '$15.00 · Paid', '$15.00 · Paid', 'Not involved'],
     ];
     expect(create(backend(withExpenses(allPaid)), [], 1)).toEqual({
@@ -676,6 +706,7 @@ describe('handleRequest: settlements', () => {
       total: 4500,
       payer: 'Anh',
       note: 'changed',
+      tags: [],
       shares: { Anh: 1500, Bảo: 1500, Chi: 1500 },
     };
     expect(send(b, { action: 'editExpense', expenseId: 1, expense: groceries })).toEqual(
@@ -712,11 +743,11 @@ describe('handleRequest: settlements', () => {
     ]);
     expect(storage.tabs.Expenses.slice(1)).toEqual([
       [
-        ...GROCERIES.slice(0, 7),
+        ...GROCERIES.slice(0, 8),
         ...['$15.00 · Paid', '$15.00 · Paid', '$15.00 · Paid', 'Not involved'],
       ],
       [
-        ...INTERNET.slice(0, 7),
+        ...INTERNET.slice(0, 8),
         ...['$15.00 · Paid', '$15.00 · Paid', 'Not involved', '$5.00 · Paid'],
       ],
     ]);
@@ -826,17 +857,17 @@ describe('handleRequest: settlements', () => {
     // Anh paid $5.00 for Bảo, and Bảo paid $5.00 for Anh.
     const storage = withExpenses(
       [
-        ...['1', '2026-11-20', 'Coffee', '$5.00', 'Anh', '', ''],
+        ...['1', '2026-11-20', 'Coffee', '$5.00', 'Anh', '', '', ''],
         ...['Not involved', '$5.00 · Not paid', 'Not involved', 'Not involved'],
       ],
       [
-        ...['2', '2026-11-21', 'Tea', '$5.00', 'Bảo', '', ''],
+        ...['2', '2026-11-21', 'Tea', '$5.00', 'Bảo', '', '', ''],
         ...['$5.00 · Not paid', 'Not involved', 'Not involved', 'Not involved'],
       ],
     );
     expect(create(backend(storage), []).ok).toBe(true);
     expect(storage.tabs.Settlements).toHaveLength(1);
-    expect(storage.tabs.Expenses.slice(1).map((row) => row.slice(7, 9))).toEqual([
+    expect(storage.tabs.Expenses.slice(1).map((row) => row.slice(8, 10))).toEqual([
       ['Not involved', '$5.00 · Paid'],
       ['$5.00 · Paid', 'Not involved'],
     ]);
@@ -899,6 +930,7 @@ describe('handleRequest: settlements', () => {
           total: 4500,
           payer: 'Bảo',
           note: '',
+          tags: [],
           shares: { Anh: 1500, Bảo: 1500, Chi: 1500 },
         },
       });
@@ -920,6 +952,7 @@ describe('handleRequest: settlements', () => {
             total: 4500,
             payer: 'Anh',
             note: 'changed',
+            tags: [],
             shares: { Anh: 1500, Bảo: 1500, Chi: 1500 },
           },
         }),

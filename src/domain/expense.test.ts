@@ -34,6 +34,7 @@ describe('buildExpense', () => {
     total: 1000,
     payer: 'Bảo',
     note: ' ',
+    tags: [],
     shares: { Anh: 333, Bảo: 334, Chi: 333 },
   };
 
@@ -47,6 +48,7 @@ describe('buildExpense', () => {
         total: 1000,
         payer: 'Bảo',
         note: '',
+        tags: [],
         deletedAt: null,
         people: {
           Anh: { kind: 'share', amount: 333, status: 'Not paid' },
@@ -102,6 +104,7 @@ function expense(id: number, date: string, description: string, deletedAt?: stri
     total: 100,
     payer: 'Anh',
     note: '',
+    tags: [],
     deletedAt: deletedAt ?? null,
     people: { Anh: { kind: 'share', amount: 100, status: 'Paid' } },
   };
@@ -142,6 +145,7 @@ describe('withShareStatus', () => {
     total: 3000,
     payer: 'Anh',
     note: '',
+    tags: [],
     deletedAt: null,
     people: {
       Anh: { kind: 'share', amount: 1000, status: 'Paid' },
@@ -188,6 +192,7 @@ describe('withShareStatuses', () => {
     total: 900,
     payer: 'Anh',
     note: '',
+    tags: [],
     deletedAt: null,
     people: {
       Anh: { kind: 'share', amount: 300, status: 'Paid' },
@@ -228,6 +233,7 @@ describe('carryOverStatuses', () => {
     total: 3000,
     payer: 'Anh',
     note: '',
+    tags: [],
     deletedAt: null,
     people: {
       Anh: share(1000, 'Paid'),
