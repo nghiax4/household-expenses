@@ -23,6 +23,8 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 **Search box** on the Expenses list (Ctrl+F style, ignores accents): live since 2026-11-23 (`2bff1e0`; front-end only). Checked on the live site: "tien dien" finds the 6 electricity bills.
 
+**List views** (Cards / Compact / Table, month headings that fold): built and tested 2026-11-24, not pushed yet (front-end only).
+
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
    - A sample storage sheet exists in the user's personal Drive (link and contents in private notes). The user wants to keep it until the real sheet exists.
@@ -30,7 +32,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
 4. ~~Delete the two empty "Who" columns~~ (done 2026-11-20). The backup copy can be trashed once the user is happy (ask first).
-5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. ~~Tags~~ and ~~search~~ built 2026-11-23. Next: "what I owe" → activity log, as real use shows what's needed. Every write needs an Activity entry (the lock already covers every request).
+5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. ~~Tags~~ and ~~search~~ built 2026-11-23; ~~list views~~ built 2026-11-24. Next: "what I owe" → activity log, as real use shows what's needed. Every write needs an Activity entry (the lock already covers every request).
 6. ~~Import sheet2~~ (done 2026-11-23, into a fresh storage sheet).
 7. **Hand over to the household:** share the link and passcode. Before anyone taps Create on the first settlement, check its preview with the household (it nets every unpaid share since April; one person's amount is large; numbers in private notes).
 8. Later, with the user's OK: trash the "TEST" storage sheet and the two backup copies (2026-11-20, and 2026-11-23 before the Tags column).
@@ -40,6 +42,12 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
+
+### 2026-11-24 (list views)
+- The user wanted to see more expenses at once ("views") and liked all three ideas. Built a Cards | Compact | Table switch (remembered per device), month headings with count and total in every view (fold with a tap; not while searching), compact rows ("3 owe" / "✓ All paid" / "✓ Paid off"), a sheet-like table (a column per person, scrolls sideways, expense column fixed), and a dialog with the full card when a row is tapped (`src/domain/months.ts`, `CompactRow`, `ExpenseTable`, `expensesView.ts`).
+- The new e2e test caught the table stretching the iPhone page sideways (screen-reader-only text escaping the scroll box); fixed with `relative` on the box.
+- Checks: 287 unit and 56 e2e tests pass; iPhone screenshots of all three views.
+- Not done: push.
 
 ### 2026-11-23, late night (search)
 - The user asked for a Ctrl+F. A richer search ("unpaid", months, totals) was offered and declined as unclear; built the plain version: one box above the list, phrase match in description, note, tags, names and total, ignoring case and accents (`src/domain/search.ts`), with a count, an empty message and ✕.
@@ -67,13 +75,3 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - Checks: 263 unit and 52 e2e tests pass; iPhone screenshot checked.
 - Shipped: backend first (version 9; a live `listExpenses` returns `notes: []`), then the site (the new site expects `notes` in the data; the old site ignores it).
 - The user likes the Notes tab and thinks the app is about ready to be put into use; **next session: talk about rollout** (clearing the test rows, the sheet2 import and its no-date rows, telling the household).
-
-### 2026-11-23 (settlements live; closing made final)
-- Went live: "Cancelled at" header added to the real sheet, backend redeployed, site pushed (`6901b73`), Claude in Chrome check of the live preview.
-- The user tried it on the iPhone and found a hole: after settlement #2 closed, Mark who paid could set a settled share back to Not paid, so the sheet contradicted itself and the next settlement would charge it again.
-- User's choice: **closing is final**. The earliest pending or closed settlement covering an expense locks it (`coveringSettlement`); closed ones for good. Cards say "Paid off in settlement #K."; the backend refuses Mark who paid / edit / delete with "…was paid off in settlement #K, so it can't be changed anymore. If something about it is wrong, fix it in the sheet." The close warning now says it's final. Known gap: "Mark all paid" (shares cancel out) stores no settlement, so those expenses aren't locked.
-- User feedback: replies were too long; explain designs as app behavior, not code.
-- Audit for nonsensical states (4 subagents: settlements, concurrency, single expense, sheet hand edits). Root causes found: (1) a Paid share survives edits that change its amount, payer or people, and deletes drop paid money → proposed: no edit/delete while anyone has paid back; (2) stale phones overwrite newer changes (edit, Mark who paid, a tick that closes a settlement without the warning) and refused saves leave the screen stale → **built** (the only one the user wanted fixed): each change carries what the phone saw (`seen`), refused if the expense or settlement changed at all; a failed save shows **Show the latest** (the user asked for a tap rather than an automatic refresh, so the screen doesn't change before they read why); the cancel-confirm box got its React key; (3) hand edits can reuse an expense ID inside a settlement's range or close a settlement without paying its shares → proposed: new IDs always above every settlement's range, and an unpaid share inside a closed settlement is flagged as a sheet problem; (4) small: cancel-confirm box can carry over to a new settlement (no React key), payer's share Not paid by hand isn't flagged. The user accepted the rest as fine for the app's simplicity; they'll jot weird cases in the Ideas tab and bring them to Claude. Also left: duplicate add after a 60 s timeout (Show the latest now lets them check), sheet locale, date range, "1,2,3" amount parsing.
-- Shipped both (site `0fcb20f`, then backend version 8). Live checks with direct calls that write nothing: a wrong `seen` is refused ("changed on another device"), and the right one on test expense #1 gets "paid off in settlement #2". A first check looked like a backend bug, so the backend was rolled back to version 7 for a few minutes; the real cause was the test itself (Python on Windows mangled the Vietnamese names; fixed with `PYTHONUTF8=1`, now noted in CLAUDE.md). Right after a redeploy, Google can serve the old version for up to a minute.
-- The user tried the two-device Mark who paid test on the live app (iPhone + laptop): it works. The stale Edit case wasn't tried by hand (covered by a backend unit test only).
-- Not done: clearing the test rows before the import.

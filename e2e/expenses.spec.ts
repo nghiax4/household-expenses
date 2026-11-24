@@ -590,3 +590,65 @@ test('searches the list like Ctrl+F, ignoring accents, and keeps the search acro
   await expect(search).toHaveValue('');
   await expect(headings).toHaveText(['Internet', 'Groceries']);
 });
+
+test('switches between cards, compact rows and a table, grouped by month', async ({ page }) => {
+  const groceries = START.expenses[0]!;
+  const internet = START.expenses[1]!;
+  await fakeBackend(page, {
+    ...START,
+    problems: [],
+    expenses: [
+      { ...groceries, date: '2026-10-05' },
+      { ...internet, date: '2026-11-20' },
+    ],
+  });
+  await page.goto('/');
+  const view = page.getByRole('group', { name: 'View' });
+  const november = page.getByRole('button', { name: /November 2026/ });
+  await expect(november).toContainText('1 expense · $40.00');
+  await expect(page.getByRole('button', { name: /October 2026/ })).toContainText(
+    '1 expense · $30.00',
+  );
+
+  // Compact: one row each, saying how many still owe; tapping one opens the full card.
+  await view.getByRole('button', { name: 'Compact' }).click();
+  const internetRow = page.getByRole('button', { name: /Internet.*\$40\.00.*2 owe/ });
+  await expect(internetRow).toBeVisible();
+  await expect(page.getByRole('button', { name: /Groceries.*\$30\.00.*1 owe/ })).toBeVisible();
+  await internetRow.click();
+  const opened = page.getByRole('dialog', { name: 'Internet' });
+  await expect(opened.getByRole('list', { name: 'Shares' }).getByRole('listitem')).toHaveCount(4);
+  await opened.getByRole('button', { name: 'Mark who paid' }).click();
+  await expect(
+    page.getByRole('dialog', { name: /Who has paid back for “Internet”/ }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Folding a month hides its rows.
+  await november.click();
+  await expect(november).toHaveAttribute('aria-expanded', 'false');
+  await expect(internetRow).toBeHidden();
+  await november.click();
+
+  // Table: a column per person, like the sheet, without the page scrolling sideways.
+  await view.getByRole('button', { name: 'Table' }).click();
+  const table = page.getByRole('table', { name: 'Expenses, November 2026' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Expense', 'Total', ...PEOPLE]);
+  await expect(table.getByRole('row').nth(1).getByRole('cell')).toHaveText([
+    '$40.00',
+    '✓ $10.00, paid',
+    '✓ $10.00, paid',
+    '$10.00, not paid',
+    '$10.00, not paid',
+  ]);
+  const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(pageWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await table.getByRole('button', { name: /Internet/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Internet' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+
+  // The choice is remembered on this device.
+  await page.reload();
+  await expect(view.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
+});

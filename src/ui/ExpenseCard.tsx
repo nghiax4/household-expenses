@@ -19,6 +19,8 @@ interface Props {
   lock: { settlementId: number; paidOff: boolean } | null;
   onMarkWhoPaid: () => void;
   onEdit: () => void;
+  /** Gives the title an id, so a dialog showing the card can be named after it. */
+  titleId?: string;
 }
 
 const CARD_BUTTON =
@@ -32,12 +34,15 @@ export function ExpenseCard({
   lock,
   onMarkWhoPaid,
   onEdit,
+  titleId,
 }: Props) {
   const sharers = people.filter((person) => expense.people[person]?.kind === 'share');
   return (
     <li className="rounded-xl border border-slate-200 p-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="min-w-0 font-medium break-words">{expense.description}</h2>
+        <h2 id={titleId} className="min-w-0 font-medium break-words">
+          {expense.description}
+        </h2>
         <p className="shrink-0 font-semibold tabular-nums">{formatDollars(expense.total)}</p>
       </div>
       <p className="text-sm text-slate-600">

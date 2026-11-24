@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, localDate } from './dates';
+import { formatDate, formatMonth, localDate } from './dates';
 
 describe('localDate', () => {
   it('counts back in local days, across month and year ends', () => {
@@ -15,5 +15,12 @@ describe('formatDate', () => {
   it('leaves out the year only for the current year', () => {
     expect(formatDate('2026-11-05', '2026-11-21')).toBe('Nov 5');
     expect(formatDate('2025-12-31', '2026-01-01')).toBe('Dec 31, 2025');
+  });
+});
+
+describe('formatMonth', () => {
+  it('names the month in full, with its year', () => {
+    expect(formatMonth('2026-11')).toBe('November 2026');
+    expect(formatMonth('2025-01')).toBe('January 2025');
   });
 });

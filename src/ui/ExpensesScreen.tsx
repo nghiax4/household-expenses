@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import type { SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
+import { formatDollars } from '../domain/money';
+import { groupByMonth, type MonthGroup } from '../domain/months';
 import { matchesSearch } from '../domain/search';
 import { coveringSettlement, settlementState } from '../domain/settlement';
-import { localDate } from './dates';
+import { Choice } from './Choice';
+import { CompactRow } from './CompactRow';
+import { formatMonth, localDate } from './dates';
+import { Dialog } from './Dialog';
 import { ExpenseCard } from './ExpenseCard';
 import { ExpenseForm } from './ExpenseForm';
+import { ExpenseTable } from './ExpenseTable';
+import { loadExpensesView, saveExpensesView, type ExpensesView } from './expensesView';
 import { WhoPaidDialog } from './WhoPaidDialog';
 
 interface Props {
@@ -16,13 +23,24 @@ interface Props {
   onPasscodeRejected: () => void;
 }
 
+const VIEW_LABELS: Record<ExpensesView, string> = {
+  cards: 'Cards',
+  compact: 'Compact',
+  table: 'Table',
+};
+
 export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: Props) {
   // The form, when it's open: for a new expense, or for editing one.
   const [form, setForm] = useState<{ editing?: Expense } | null>(null);
   // The expense whose "Mark who paid" checklist is open.
   const [marking, setMarking] = useState<Expense | null>(null);
+  // The expense opened from a compact or table row, shown as a full card.
+  const [opened, setOpened] = useState<Expense | null>(null);
   // What's typed in the search box. Kept while the form is open, so the list comes back as it was.
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<ExpensesView>(loadExpensesView);
+  // Months folded away ("YYYY-MM"), to get past old months quickly.
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
 
   if (form) {
     return (
@@ -44,6 +62,75 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
   const expenses = allExpenses.filter((expense) => matchesSearch(expense, search));
   const searching = search.trim() !== '';
   const today = localDate(0);
+
+  function chooseView(next: ExpensesView) {
+    setView(next);
+    saveExpensesView(next);
+  }
+
+  function toggleMonth(month: string) {
+    const next = new Set(folded);
+    if (!next.delete(month)) {
+      next.add(month);
+    }
+    setFolded(next);
+  }
+
+  function card(expense: Expense, titleId?: string) {
+    return (
+      <ExpenseCard
+        key={expense.id}
+        expense={expense}
+        people={data.people}
+        today={today}
+        templates={data.templates}
+        lock={cardLock(data, expense.id)}
+        titleId={titleId}
+        // The card may be open in a dialog; close it first so only one dialog shows.
+        onMarkWhoPaid={() => {
+          setOpened(null);
+          setMarking(expense);
+        }}
+        onEdit={() => {
+          setOpened(null);
+          setForm({ editing: expense });
+        }}
+      />
+    );
+  }
+
+  function monthBody(group: MonthGroup, label: string) {
+    if (view === 'table') {
+      return (
+        <ExpenseTable
+          label={label}
+          expenses={group.expenses}
+          people={data.people}
+          today={today}
+          onOpen={setOpened}
+        />
+      );
+    }
+    return (
+      <ul aria-label={label} className={`flex flex-col ${view === 'compact' ? 'gap-2' : 'gap-3'}`}>
+        {group.expenses.map((expense) =>
+          view === 'compact' ? (
+            <CompactRow
+              key={expense.id}
+              expense={expense}
+              today={today}
+              templates={data.templates}
+              paidOff={cardLock(data, expense.id)?.paidOff ?? false}
+              onOpen={() => setOpened(expense)}
+            />
+          ) : (
+            card(expense)
+          ),
+        )}
+      </ul>
+    );
+  }
+
   return (
     <div className="mt-4 flex flex-col gap-4">
       {data.problems.length > 0 && (
@@ -67,7 +154,7 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
         Add expense
       </button>
       {allExpenses.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <div className="relative">
             <input
               type="search"
@@ -89,6 +176,13 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
               </button>
             )}
           </div>
+          <div role="group" aria-label="View" className="flex gap-2">
+            {(Object.keys(VIEW_LABELS) as ExpensesView[]).map((option) => (
+              <Choice key={option} selected={view === option} onClick={() => chooseView(option)}>
+                {VIEW_LABELS[option]}
+              </Choice>
+            ))}
+          </div>
           {searching && (
             <p aria-live="polite" className="text-sm text-slate-600">
               {expenses.length} of {allExpenses.length} expenses
@@ -101,20 +195,48 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
       ) : expenses.length === 0 ? (
         <p className="text-slate-600">No expenses match “{search.trim()}”.</p>
       ) : (
-        <ul aria-label="Expenses" className="flex flex-col gap-3">
-          {expenses.map((expense) => (
-            <ExpenseCard
-              key={expense.id}
-              expense={expense}
-              people={data.people}
-              today={today}
-              templates={data.templates}
-              lock={cardLock(data, expense.id)}
-              onMarkWhoPaid={() => setMarking(expense)}
-              onEdit={() => setForm({ editing: expense })}
-            />
-          ))}
-        </ul>
+        groupByMonth(expenses).map((group) => {
+          const month = formatMonth(group.month);
+          // While searching, every match shows, so a folded month can't hide one.
+          const isFolded = !searching && folded.has(group.month);
+          return (
+            <section key={group.month} className="flex flex-col gap-2">
+              <button
+                type="button"
+                aria-expanded={!isFolded}
+                disabled={searching}
+                onClick={() => toggleMonth(group.month)}
+                className="flex items-baseline justify-between gap-3 text-left"
+              >
+                <span className="font-semibold">
+                  {!searching && (
+                    <span aria-hidden="true" className="mr-1.5 inline-block w-3 text-slate-500">
+                      {isFolded ? '▸' : '▾'}
+                    </span>
+                  )}
+                  {month}
+                </span>
+                <span className="text-sm text-slate-600 tabular-nums">
+                  {group.expenses.length} {group.expenses.length === 1 ? 'expense' : 'expenses'} ·{' '}
+                  {formatDollars(group.total)}
+                </span>
+              </button>
+              {!isFolded && monthBody(group, `Expenses, ${month}`)}
+            </section>
+          );
+        })
+      )}
+      {opened && (
+        <Dialog titleId="opened-expense-title">
+          <ul>{card(opened, 'opened-expense-title')}</ul>
+          <button
+            type="button"
+            onClick={() => setOpened(null)}
+            className="h-12 rounded-lg border border-slate-300 font-medium"
+          >
+            Close
+          </button>
+        </Dialog>
       )}
       {marking && (
         <WhoPaidDialog
