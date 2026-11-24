@@ -19,6 +19,8 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 **sheet2 is imported (2026-11-23)** into a **fresh storage sheet** (ID in private notes; the old one, with only test data, is kept and renamed "TEST"). 49 expenses, added one at a time through the app's own requests and checked; count and total match sheet2. Nobody has created a settlement yet. The household hasn't been told yet.
 
+**Tags: live since 2026-11-23.** Any expense can carry short tags; a tag equal to a template's name is a bill and shows in that bill's color. The real sheet got a Tags column (G, before Deleted at; person columns now start at I), after a backup copy. The 25 imported bills are tagged (Rent, Internet, Electricity, Insurance).
+
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
    - A sample storage sheet exists in the user's personal Drive (link and contents in private notes). The user wants to keep it until the real sheet exists.
@@ -29,13 +31,20 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. Next: "what I owe" → activity log → search/filter, as real use shows what's needed. Every write needs an Activity entry (the lock already covers every request).
 6. ~~Import sheet2~~ (done 2026-11-23, into a fresh storage sheet).
 7. **Hand over to the household:** share the link and passcode. Before anyone taps Create on the first settlement, check its preview with the household (it nets every unpaid share since April; one person's amount is large; numbers in private notes).
-8. Later, with the user's OK: trash the "TEST" storage sheet and the 2026-11-20 backup copy.
+8. Later, with the user's OK: trash the "TEST" storage sheet and the two backup copies (2026-11-20, and 2026-11-23 before the Tags column).
 
 ## Open questions
 - None.
 
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
+
+### 2026-11-23, night (tags)
+- The user wanted the template bills to stand out, then suggested tags on every expense. A subagent argued for deriving bills from descriptions instead; the user found that hacky and chose **general tags**.
+- Built: `src/domain/tags.ts` (normalize, cell format, suggestions, bill lookup), Tags on `Expense`/`NewExpense`, a Tags column in the Expenses tab (person columns H → I; formatting constants and docs updated), Activity logs tags, `TagPicker` on the form (bills first, then tags in use; type a new one; a template sets its bill tag), `TagPill` on cards (bills colored, others gray outline).
+- Checks: 269 unit and 52 e2e tests pass; iPhone screenshots of the form and list.
+- Shipped: backup copy of the real sheet, inserted column G "Tags" in Chrome (formatting moved with the person columns), deployed the backend (version 10), pushed the site (`d8a4adc`). Live check: 49 expenses read with tags, no problems. Tagged the 25 imported bills through the app's Edit, each checked; checked the live list in Chrome.
+- Not done: the user trying tags on the iPhone.
 
 ### 2026-11-23, evening (rollout: fresh sheet + sheet2 import)
 - Session start: one open note ("Lol", the user's test).
@@ -69,18 +78,3 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - Fixed in passing: the "it may still have saved" timeout message now covers every write (edit and delete were missing).
 - Checks: 246 unit and 44 e2e tests pass (typecheck, lint, format too). iPhone (WebKit) and desktop Chrome screenshots of every settlement state checked with made-up data, via Playwright (the real backend doesn't have the new actions yet, so no Claude in Chrome check against it).
 - Went live (next day, see 2026-11-23): added the "Cancelled at" header to the real sheet's Settlements tab (I1, styled like the others), redeployed the backend (checked with a direct `listExpenses` call), committed and pushed. Claude in Chrome check of the live site: tab bar, Settle up screen and the preview for test expense #1 (3 transfers, $2.02 in all) correct, no console errors; closed without creating.
-
-### 2026-11-22 (real-sheet test, payer hint, Paid toggles, loading)
-- Session start: no notes in the Ideas tab. All checks passed on last session's uncommitted work.
-- The user added a test expense from their iPhone (dev server over Wi-Fi) with the payer **left out of the split** on purpose. The real sheet read back correct: row #1, the extra cents going to the first people in column order, and the Activity entry.
-- The user asked whether a payer outside the split should be allowed. It's in the spec on purpose (paying only for others), so the user kept it, and the Add form now shows a hint under the share preview when it happens. E2E test extended; iPhone screenshot checked with made-up data. Spec in `docs/requirements.md`.
-- Links given to the user are plain (no `/u/1/`): they use several Chrome profiles.
-- Committed and pushed (with the 2026-11-21 work) at the user's OK.
-- Built **Paid toggles**, first as tappable chips with an "ask first" box (backend action `setShareStatus`). The user tried it on the phone (worked) but found the chips didn't look tappable. After comparing six designs (mockups in chat), they chose **F**: plain chips plus a **Mark who paid** button that opens a checklist (checkbox + colored chip + "Paid back" / "Not paid"; the payer's row says "Paid the bill"), saved with one Save. The backend action became `setShareStatuses` (only changed shares, checked all-or-nothing, one Activity row each); shared rule `withShareStatuses` in `src/domain/expense.ts`. 165 unit and 20 e2e tests pass; iPhone screenshots of the cards and checklist checked. Backend redeployed (user's OK) and checked with a refused request that wrote nothing.
-- The user tried the checklist on their iPhone against the real sheet: "works well".
-- Added a **spinner with a seconds counter** (from 0s, at the user's request) to every wait and a **60-second give-up** in `src/api/client.ts` (before, the app had no time limit of its own). New `src/ui/Waiting.tsx`; e2e test fast-forwards the clock against a backend that never answers. 165 unit and 22 e2e tests pass; iPhone screenshots of the counter and the give-up message checked.
-- Committed and pushed (user's OK). The counter later changed to count from 0s (user's request), also pushed.
-- Built **custom and % splits** on the Add form: a 3-way switch Equally / Amounts / Percent, boxes per person that start at the equal split, and a live "left to split / too much / ✓ adds up" line. New `SplitPicker.tsx` and `Choice.tsx` (split out of the form); `parseTypedPercent`, `formatPercent` and `sharesFromTyped` in `src/domain/split.ts`. No backend change (it already took any shares). 192 unit and 24 e2e tests pass; iPhone screenshots checked. The user tried it on their iPhone ("works"); the boxes were then left-aligned so a tap puts the cursor after the number (e2e test checks it, and fails on the old style). Committed and pushed (user's OK).
-- Added **scroll cues**: gray shadows at the top/bottom edge while there's more to scroll, on every screen and inside the checklist box (`src/ui/ScrollFades.tsx`, IntersectionObserver on end markers). The user asked for a very visible scrollbar; iPhone Safari can't do that without faking one, so they picked edge fades. Also fixed a flaky e2e test (the slow-save test's fake clock now stays paused). 192 unit and 26 e2e tests pass; iPhone screenshots checked. The user tried it on their iPhone ("good"); committed and pushed.
-- Built **quick-add templates**, edited only in the sheet (the user's idea; Claude does the edits). The backend reads the Templates tab with every load (`apps-script/src/templatesTab.ts`; bad rows skipped and explained); the Add form shows **Quick fill** buttons that fill description, payer, people and default amount (at first Total also got focus when there was no default; removed at the user's request because the keypad popping up was annoying). `ExpensesData` renamed `SheetData`. Backend redeployed. Claude typed the 4 starting rows (English names; rent and electricity without a default) in Chrome after confirming the sheet's protection warning; read back through the live backend: all 4 parse, no problems. 199 unit and 28 e2e tests pass; iPhone screenshot checked. The user tried it on their iPhone; committed and pushed (user's OK).
-- Built **edit and delete**: an Edit button on each card opens the shared form (`AddExpenseForm.tsx` renamed `ExpenseForm.tsx`), prefilled, with Delete expense at the bottom (asks first). Edits keep who had paid back (`carryOverStatuses`); deletes only fill in "Deleted at" (the user didn't want a trash screen; the row stays so IDs are never reused). New backend actions `editExpense` / `deleteExpense`, each logged to Activity with full details; storage gained `setRow`. 209 unit and 34 e2e tests pass; iPhone screenshots checked; backend redeployed. The user tried it on their iPhone: the edit of test expense #1 ($1.01 → $2.02) is correct in the real sheet; delete was not yet tried there (checked live: #1 still not deleted). Committed and pushed (user's OK).
