@@ -21,7 +21,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 **Tags: live since 2026-11-23.** Any expense can carry short tags; a tag equal to a template's name is a bill and shows in that bill's color. The real sheet got a Tags column (G, before Deleted at; person columns now start at I), after a backup copy. The 25 imported bills are tagged (Rent, Internet, Electricity, Insurance).
 
-**Search box** on the Expenses list (Ctrl+F style, ignores accents): built and tested 2026-11-23, not pushed yet (front-end only; no backend or sheet change).
+**Search box** on the Expenses list (Ctrl+F style, ignores accents): live since 2026-11-23 (`2bff1e0`; front-end only). Checked on the live site: "tien dien" finds the 6 electricity bills.
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
@@ -44,7 +44,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 ### 2026-11-23, late night (search)
 - The user asked for a Ctrl+F. A richer search ("unpaid", months, totals) was offered and declined as unclear; built the plain version: one box above the list, phrase match in description, note, tags, names and total, ignoring case and accents (`src/domain/search.ts`), with a count, an empty message and ✕.
 - Checks: 283 unit and 54 e2e tests pass; iPhone screenshot.
-- Not done: push (front-end only, so no ordering concerns).
+- Shipped (`2bff1e0`) and checked on the live site in Chrome.
 
 ### 2026-11-23, night (tags)
 - The user wanted the template bills to stand out, then suggested tags on every expense. A subagent argued for deriving bills from descriptions instead; the user found that hacky and chose **general tags**.
