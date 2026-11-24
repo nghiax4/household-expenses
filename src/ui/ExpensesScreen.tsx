@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SheetData } from '../api/protocol';
 import { liveExpensesNewestFirst, type Expense } from '../domain/expense';
+import { matchesSearch } from '../domain/search';
 import { coveringSettlement, settlementState } from '../domain/settlement';
 import { localDate } from './dates';
 import { ExpenseCard } from './ExpenseCard';
@@ -20,6 +21,8 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
   const [form, setForm] = useState<{ editing?: Expense } | null>(null);
   // The expense whose "Mark who paid" checklist is open.
   const [marking, setMarking] = useState<Expense | null>(null);
+  // What's typed in the search box. Kept while the form is open, so the list comes back as it was.
+  const [search, setSearch] = useState('');
 
   if (form) {
     return (
@@ -37,7 +40,9 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
     );
   }
 
-  const expenses = liveExpensesNewestFirst(data.expenses);
+  const allExpenses = liveExpensesNewestFirst(data.expenses);
+  const expenses = allExpenses.filter((expense) => matchesSearch(expense, search));
+  const searching = search.trim() !== '';
   const today = localDate(0);
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -61,8 +66,40 @@ export function ExpensesScreen({ data, passcode, onData, onPasscodeRejected }: P
       >
         Add expense
       </button>
-      {expenses.length === 0 ? (
+      {allExpenses.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="relative">
+            <input
+              type="search"
+              aria-label="Search expenses"
+              placeholder="Search"
+              autoComplete="off"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-12 w-full rounded-lg border border-slate-300 pr-12 pl-3 text-base [&::-webkit-search-cancel-button]:hidden"
+            />
+            {searching && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch('')}
+                className="absolute inset-y-0 right-0 w-12 text-xl text-slate-500"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searching && (
+            <p aria-live="polite" className="text-sm text-slate-600">
+              {expenses.length} of {allExpenses.length} expenses
+            </p>
+          )}
+        </div>
+      )}
+      {allExpenses.length === 0 ? (
         <p className="text-slate-600">No expenses yet. Tap Add expense to add the first one.</p>
+      ) : expenses.length === 0 ? (
+        <p className="text-slate-600">No expenses match “{search.trim()}”.</p>
       ) : (
         <ul aria-label="Expenses" className="flex flex-col gap-3">
           {expenses.map((expense) => (

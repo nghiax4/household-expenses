@@ -559,3 +559,34 @@ test('deletes an expense, asking first', async ({ page }) => {
   await expect(headings).toHaveText(['Internet']);
   expect(requests.at(-1)).toMatchObject({ action: 'deleteExpense', expenseId: 1 });
 });
+
+test('searches the list like Ctrl+F, ignoring accents, and keeps the search across Add', async ({
+  page,
+}) => {
+  await fakeBackend(page, START);
+  await page.goto('/');
+  const search = page.getByRole('searchbox', { name: 'Search expenses' });
+  const headings = page.getByRole('list', { name: 'Expenses' }).getByRole('heading');
+  await expect(headings).toHaveText(['Internet', 'Groceries']);
+
+  // A participant's name, typed without its accent, finds only the expense they're in.
+  await search.fill('duong');
+  await expect(headings).toHaveText(['Internet']);
+  await expect(page.getByText('1 of 2 expenses')).toBeVisible();
+
+  // The total, as typed.
+  await search.fill('30.00');
+  await expect(headings).toHaveText(['Groceries']);
+
+  // The search stays while adding, so the list comes back as it was.
+  await page.getByRole('button', { name: 'Add expense' }).click();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(search).toHaveValue('30.00');
+  await expect(headings).toHaveText(['Groceries']);
+
+  await search.fill('pizza');
+  await expect(page.getByText('No expenses match “pizza”.')).toBeVisible();
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(search).toHaveValue('');
+  await expect(headings).toHaveText(['Internet', 'Groceries']);
+});

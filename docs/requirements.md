@@ -99,7 +99,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 
 ## Views
 - **Navigation** (built 2026-11-22, user's choice): a **bottom tab bar** fixed at the bottom of the screen, like most iPhone apps (Expenses, Settle up, Notes; Activity and What I owe will join it, five at most). Switching tabs keeps each screen's state, so a half-typed expense survives a look at Settle up. Dialogs cover the bar.
-- **Expense list** (newest first) with **search and filters**: by person, payer, date range, keyword.
+- **Expense list** (newest first) with a **search box** (built 2026-11-23, the user's "Ctrl+F"): above the list, filtering as you type. It matches the typed text anywhere in an expense's description, note, tags, payer's or a participant's name, or total ("40" finds $40.00), ignoring case and Vietnamese accents ("tien dien" finds "Tiền điện"). Shows "3 of 49 expenses", "No expenses match …" and an ✕ to clear. The search stays while the Add/Edit form is open. (A richer version with "unpaid" and month words was offered and declined as unclear.) Filters by date range are not built.
 - **"What I owe / am owed" view**: pick a person from a list on that screen to see their unpaid shares and running totals.
 - **Settle up** (built 2026-11-22): Get total settlement, or the pending settlement with its transfers, plus history. See "Settlements".
 - **Activity log**: what changed and when, e.g., `Edited "Grocery delivery": $44.27 → $42.27`. It doesn't say who.

@@ -21,6 +21,8 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 **Tags: live since 2026-11-23.** Any expense can carry short tags; a tag equal to a template's name is a bill and shows in that bill's color. The real sheet got a Tags column (G, before Deleted at; person columns now start at I), after a backup copy. The 25 imported bills are tagged (Rent, Internet, Electricity, Insurance).
 
+**Search box** on the Expenses list (Ctrl+F style, ignores accents): built and tested 2026-11-23, not pushed yet (front-end only; no backend or sheet change).
+
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
    - A sample storage sheet exists in the user's personal Drive (link and contents in private notes). The user wants to keep it until the real sheet exists.
@@ -28,7 +30,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 2. ~~Scaffold the project~~ (done 2026-11-19; layout in `docs/decisions.md` and CLAUDE.md). The core domain logic is done too.
 3. ~~Publish + backend slice~~ (done 2026-11-19): repo, Pages, backend, storage sheet, passcode screen.
 4. ~~Delete the two empty "Who" columns~~ (done 2026-11-20). The backup copy can be trashed once the user is happy (ask first).
-5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. Next: "what I owe" → activity log → search/filter, as real use shows what's needed. Every write needs an Activity entry (the lock already covers every request).
+5. Build the MVP features (see `docs/requirements.md`). ~~List expenses~~ and ~~add expense (equal split)~~ done 2026-11-21, ~~tried against the real sheet~~ 2026-11-22, ~~Paid toggles~~ and the loading spinner done 2026-11-22; ~~custom/% splits~~ done 2026-11-22. ~~templates~~ and ~~edit + delete~~ built 2026-11-22 (no trash screen, by the user's choice). ~~Settlements~~ and the bottom tab bar built 2026-11-22, live 2026-11-23 and tried on the iPhone; closing made final 2026-11-23; ~~Notes tab~~ (was "Ideas") built 2026-11-23. ~~Tags~~ and ~~search~~ built 2026-11-23. Next: "what I owe" → activity log, as real use shows what's needed. Every write needs an Activity entry (the lock already covers every request).
 6. ~~Import sheet2~~ (done 2026-11-23, into a fresh storage sheet).
 7. **Hand over to the household:** share the link and passcode. Before anyone taps Create on the first settlement, check its preview with the household (it nets every unpaid share since April; one person's amount is large; numbers in private notes).
 8. Later, with the user's OK: trash the "TEST" storage sheet and the two backup copies (2026-11-20, and 2026-11-23 before the Tags column).
@@ -38,6 +40,11 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 ## Session log
 <!-- Newest first. Keep the 5 most recent; move older entries to docs/session-history.md -->
+
+### 2026-11-23, late night (search)
+- The user asked for a Ctrl+F. A richer search ("unpaid", months, totals) was offered and declined as unclear; built the plain version: one box above the list, phrase match in description, note, tags, names and total, ignoring case and accents (`src/domain/search.ts`), with a count, an empty message and ✕.
+- Checks: 283 unit and 54 e2e tests pass; iPhone screenshot.
+- Not done: push (front-end only, so no ordering concerns).
 
 ### 2026-11-23, night (tags)
 - The user wanted the template bills to stand out, then suggested tags on every expense. A subagent argued for deriving bills from descriptions instead; the user found that hacky and chose **general tags**.
@@ -70,11 +77,3 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - Shipped both (site `0fcb20f`, then backend version 8). Live checks with direct calls that write nothing: a wrong `seen` is refused ("changed on another device"), and the right one on test expense #1 gets "paid off in settlement #2". A first check looked like a backend bug, so the backend was rolled back to version 7 for a few minutes; the real cause was the test itself (Python on Windows mangled the Vietnamese names; fixed with `PYTHONUTF8=1`, now noted in CLAUDE.md). Right after a redeploy, Google can serve the old version for up to a minute.
 - The user tried the two-device Mark who paid test on the live app (iPhone + laptop): it works. The stale Edit case wasn't tried by hand (covered by a backend unit test only).
 - Not done: clearing the test rows before the import.
-
-### 2026-11-22, later (settlements)
-- Session start: no notes in the Ideas tab. Real sheet: only test expense #1 ($2.02, not deleted); Settlements empty.
-- The user left the session's focus to Claude: **settlements**. User's picks: bottom tab bar, preview before Create, cancel only while no transfer is ticked.
-- Built: domain rules in `src/domain/settlement.ts` (`proposeSettlement`, `settlementState`, `lockingSettlement` (now `coveringSettlement`), `withTransferStatuses`, `paidOffExpenses`); backend `apps-script/src/settlementsTab.ts` plus actions `createSettlement`, `setTransferStatuses` (ticking the last line closes it and marks every covered share Paid) and `cancelSettlement`; edit, delete and Mark who paid refuse locked expenses. Request parsing moved to `parseRequest.ts`, cell helpers to `cells.ts`. UI: `UnlockedApp` (loads once, keeps both screens mounted), `TabBar`, `SettleScreen`, `SettlementPreview`, `TransfersDialog`, a shared `Dialog` shell; locked cards say "In settlement #K…". New Settlements column **Cancelled at**.
-- Fixed in passing: the "it may still have saved" timeout message now covers every write (edit and delete were missing).
-- Checks: 246 unit and 44 e2e tests pass (typecheck, lint, format too). iPhone (WebKit) and desktop Chrome screenshots of every settlement state checked with made-up data, via Playwright (the real backend doesn't have the new actions yet, so no Claude in Chrome check against it).
-- Went live (next day, see 2026-11-23): added the "Cancelled at" header to the real sheet's Settlements tab (I1, styled like the others), redeployed the backend (checked with a direct `listExpenses` call), committed and pushed. Claude in Chrome check of the live site: tab bar, Settle up screen and the preview for test expense #1 (3 transfers, $2.02 in all) correct, no console errors; closed without creating.

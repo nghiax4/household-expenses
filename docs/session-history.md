@@ -2,6 +2,14 @@
 
 Older session log entries moved here from `progress.md`, which keeps only the 5 most recent. Newest first.
 
+### 2026-11-22, later (settlements)
+- Session start: no notes in the Ideas tab. Real sheet: only test expense #1 ($2.02, not deleted); Settlements empty.
+- The user left the session's focus to Claude: **settlements**. User's picks: bottom tab bar, preview before Create, cancel only while no transfer is ticked.
+- Built: domain rules in `src/domain/settlement.ts` (`proposeSettlement`, `settlementState`, `lockingSettlement` (now `coveringSettlement`), `withTransferStatuses`, `paidOffExpenses`); backend `apps-script/src/settlementsTab.ts` plus actions `createSettlement`, `setTransferStatuses` (ticking the last line closes it and marks every covered share Paid) and `cancelSettlement`; edit, delete and Mark who paid refuse locked expenses. Request parsing moved to `parseRequest.ts`, cell helpers to `cells.ts`. UI: `UnlockedApp` (loads once, keeps both screens mounted), `TabBar`, `SettleScreen`, `SettlementPreview`, `TransfersDialog`, a shared `Dialog` shell; locked cards say "In settlement #K…". New Settlements column **Cancelled at**.
+- Fixed in passing: the "it may still have saved" timeout message now covers every write (edit and delete were missing).
+- Checks: 246 unit and 44 e2e tests pass (typecheck, lint, format too). iPhone (WebKit) and desktop Chrome screenshots of every settlement state checked with made-up data, via Playwright (the real backend doesn't have the new actions yet, so no Claude in Chrome check against it).
+- Went live (next day, see 2026-11-23): added the "Cancelled at" header to the real sheet's Settlements tab (I1, styled like the others), redeployed the backend (checked with a direct `listExpenses` call), committed and pushed. Claude in Chrome check of the live site: tab bar, Settle up screen and the preview for test expense #1 (3 transfers, $2.02 in all) correct, no console errors; closed without creating.
+
 ### 2026-11-22 (real-sheet test, payer hint, Paid toggles, loading)
 - Session start: no notes in the Ideas tab. All checks passed on last session's uncommitted work.
 - The user added a test expense from their iPhone (dev server over Wi-Fi) with the payer **left out of the split** on purpose. The real sheet read back correct: row #1, the extra cents going to the first people in column order, and the Activity entry.
