@@ -23,7 +23,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 
 **Search box** on the Expenses list (Ctrl+F style, ignores accents): live since 2026-11-23 (`2bff1e0`; front-end only). Checked on the live site: "tien dien" finds the 6 electricity bills.
 
-**List views** (Cards / Compact / Table, month headings that fold): built and tested 2026-11-24, not pushed yet (front-end only).
+**List views** (Cards / Compact / Table, month headings that fold): live 2026-11-24 (`3135c83`), checked on the live site.
 
 ## Next steps
 1. ~~Storage layout sign-off~~. **Layout 1 approved** on 2026-11-17 (sheet2-style: Expenses, Settlements, Templates, Activity, plus an **Ideas** tab added 2026-11-19). The schema is in `docs/requirements.md` → "Storage schema".
@@ -47,7 +47,7 @@ A **mobile-first shared-expense web app** (Splitwise-style) for the household. I
 - The user wanted to see more expenses at once ("views") and liked all three ideas. Built a Cards | Compact | Table switch (remembered per device), month headings with count and total in every view (fold with a tap; not while searching), compact rows ("3 owe" / "✓ All paid" / "✓ Paid off"), a sheet-like table (a column per person, scrolls sideways, expense column fixed), and a dialog with the full card when a row is tapped (`src/domain/months.ts`, `CompactRow`, `ExpenseTable`, `expensesView.ts`).
 - The new e2e test caught the table stretching the iPhone page sideways (screen-reader-only text escaping the scroll box); fixed with `relative` on the box.
 - Checks: 287 unit and 56 e2e tests pass; iPhone screenshots of all three views.
-- Not done: push.
+- Pushed (`3135c83`); checked all three views on the live site with the real data. Not yet tried by the user on the iPhone.
 
 ### 2026-11-23, late night (search)
 - The user asked for a Ctrl+F. A richer search ("unpaid", months, totals) was offered and declined as unclear; built the plain version: one box above the list, phrase match in description, note, tags, names and total, ignoring case and accents (`src/domain/search.ts`), with a count, an empty message and ✕.
