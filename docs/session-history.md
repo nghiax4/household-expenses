@@ -2,6 +2,14 @@
 
 Older session log entries moved here from `progress.md`, which keeps only the 5 most recent. Newest first.
 
+### 2026-11-21 (expense list + add form)
+- Session start: no notes in the Ideas tab. Committed and pushed the 2026-11-20 work first (user's OK). Backup copy of the storage sheet kept for now.
+- Built the **expense list** and the **Add expense form** (equal split), end to end: shared rules in `src/domain/expense.ts` (`buildExpense`, typed-amount parsing in `money.ts`), backend actions `listExpenses`/`addExpense` (`apps-script/src/expensesTab.ts`, lock + Activity row + read-back), and the screens in `src/ui/`. Decisions in `docs/decisions.md`; spec in `docs/requirements.md` → "Expense list and Add form".
+- Product choices made for the user (they deferred; easy to change after trying it): no default payer or participants; up to 6 recent-description chips (description only); unreadable rows hidden with a yellow banner.
+- Tests: 147 unit, 14 e2e (desktop Chrome + iPhone WebKit) all pass; e2e now fail on any page error and check the add form fits the iPhone width (a date-box overflow was found and fixed this way). iPhone and desktop screenshots checked with made-up data. Claude in Chrome wasn't connected, so the desktop check used Playwright's Chrome.
+- Backend redeployed (same URL). Live check from the terminal: right passcode works, wrong one is refused, `listExpenses` reads the real (empty) sheet with all 7 people.
+- Committed and pushed on 2026-11-22, after the user tried adding against the real sheet.
+
 ### 2026-11-20 (keyboard try-out)
 - Session start: still no notes in the Ideas tab.
 - **Removed the empty "Who" columns** from the real storage sheet in Claude in Chrome (Activity B, Ideas C), after making a backup copy (name and ID in private notes; can be trashed once the user is happy). Read back with the Drive connector: Activity is Time, Action, Details; Ideas is ID, Created at, Note, Status, Outcome. The Status dropdown moved to D2:D1000 as expected (checked in the Data validation panel).

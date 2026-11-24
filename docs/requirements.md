@@ -105,7 +105,7 @@ Replaces tab **sheet2** of the household's Google Sheet. (Real names, amounts an
 ## Data migration
 - **Import all sheet2 rows** at launch, read from the live sheet at that time (the user corrects data in the sheet, e.g., rows 22, 23 and 25 on 2026-11-16).
 - Mapping: Người đóng → payer. Each person column: Paid → Paid, Not paid → Not paid, Not involved → Not involved (not a participant). Equal split. Note → note.
-- Some rows have no date (examples in private notes). Ask the user how to handle them at import time.
+- **Done 2026-11-23** into a fresh storage sheet (the test sheet was kept, renamed TEST). Each row was added through the app's own Add (then Mark who paid for shares already paid back), one at a time, each read back and checked; the result matched sheet2's row count and total. Rows with no date take the row above's date, with a note saying so. Guests (sheet2's "Extra people", or a headcount larger than the household members involved): the payer covers their part, with a note. A row whose headcount leaves out the payer (bought for someone else) has the payer outside the split. Shares use the app's rounding (payer takes leftover cents), so a few debtors owe 1¢ less than sheet2 displayed. Details in private notes.
 
 ## Architecture (decided 2026-11-16)
 - **Guiding principle:** the storage sheet should read as much like the app as possible: same names, same statuses, same shape where feasible. Any difference must have a concrete reason.
